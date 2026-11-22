@@ -2,7 +2,7 @@
 // Las secciones Planes y Calculadora están en secciones.js (reciben el contexto W).
 (function () {
   'use strict';
-  const APP_VERSION = '17';
+  const APP_VERSION = '19';
   const L = window.Logica, T = window.T, G = window.Graficas, B = window.Boveda, PL = window.Planes, PR = window.Prestamos, S = window.Sistema;
   const $ = s => document.querySelector(s);
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -926,6 +926,10 @@
           <i style="background:${MUESTRAS[t][0]};--m2:${MUESTRAS[t][1]}"></i><small>${T.temas[t]}</small></button>`).join('')}</div>
         <div class="segmento" role="radiogroup" aria-label="${T.modo}">${['auto', 'claro', 'oscuro'].map(m => `<label><input type="radio" name="modo-app" value="${m}" ${(D.ajustes.modo || 'auto') === m ? 'checked' : ''}><span>${T.modos[m]}</span></label>`).join('')}</div>
       </section>
+      ${window.Portada ? `<h2 class="sub">👤 ${T.miCuenta}</h2><section class="tarjeta">${Portada.sesion() ? `<p class="grande">${esc(Portada.sesion().nombre || '')}</p><small>${esc(Portada.sesion().correo || '')}</small>
+        <button class="pildora ancho" data-accion="cuenta-salir">${T.cerrarSesion}</button>
+        <button class="pildora peligro ancho" data-accion="cuenta-borrar">${T.borrarCuenta}</button>` : `<button class="pildora oscura ancho" data-accion="cuenta-entrar">${T.entrarOCrear}</button>`}
+        <p class="nota"><a href="legal/privacidad.html">${T.pPrivacidad}</a> · <a href="legal/terminos.html">${T.pTerminos}</a></p></section>` : ''}
       <h2 class="sub">${ico('candado')} ${T.seguridad}</h2><section class="tarjeta">
         <label class="interruptor"><span>${T.bloquearApp}</span><input type="checkbox" id="bloqueo" ${D.ajustes.bloqueoApp ? 'checked' : ''}><i></i></label>
         <p class="nota">${T.bloquearTxt}</p>
@@ -1987,6 +1991,9 @@
     else if (a === 'ir-metas') ir('planes', 'metas');
     else if (a === 'exportar-csv') exportarCsv();
     else if (a === 'instalar') instalar();
+    else if (a === 'cuenta-entrar') Portada.mostrar('login', { despues: () => pintar() });
+    else if (a === 'cuenta-salir') { Portada.salir(); pintar(); aviso(T.sesionCerrada); }
+    else if (a === 'cuenta-borrar') { if (confirm(T.confirmarBorrarCuenta)) Portada.borrarCuenta().then(() => { pintar(); aviso(T.cuentaBorrada); }, e => aviso(e.message, true)); }
     else if (a === 'instalar-luego') { try { localStorage.setItem('cuadre-instalar-oculto', String(Date.now())); } catch { /* sin almacenamiento */ } pintar(); }
     else if (a === 'actualizar') aplicarVersion();
     else if (a === 'gasto-cat') { catGasto = el.dataset.cat === catGasto ? '' : el.dataset.cat; pintar(); }
@@ -2094,6 +2101,8 @@
     if (!D.ajustes.metasCelebradas || D.ajustes.presCelebrado === undefined) revisarCelebraciones(true); // al actualizar a la v10: sin confeti
     huellaOk = await S.huellaDisponible();
     if (D.ajustes.huella && !huellaOk) D.ajustes.huella = false;
+    // Web: a quien llega por primera vez le sale la portada (registro, iniciar sesión o usar sin cuenta)
+    if (window.Portada && Portada.debeMostrar(D)) Portada.mostrar('portada', { despues: () => pintar() });
     const nAuto = autoAnotar();
     if (D.ajustes.bloqueoApp && D.ajustes.candado) cerrarApp(); else { pintar(); reanudarBorrador(); }
     if (nAuto) guardar(bloqueada ? '' : T.autoAnotados(nAuto)); else actualizarWidget();
@@ -2106,6 +2115,6 @@
       registrarSw();
     }
   }
-  window.WalletApp = { datos: () => D, version: APP_VERSION, bovedaAbierta, atras };
+  window.WalletApp = { datos: () => D, version: APP_VERSION, bovedaAbierta, atras, instalar };
   iniciar();
 })();
