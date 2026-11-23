@@ -306,6 +306,14 @@ window.T = {
   adminCorreo: 'Correo de la cuenta', adminMeses: 'Meses de regalo', adminRegalar: 'Regalar meses', adminCuentasT: 'Cuentas',
   adminVence: 'vence', adminSinCuentas: 'Todavía no hay cuentas.', cargando: 'Cargando…',
   adminRegalado: (c, f) => `🎁 Listo: ${c} tiene Cuadre hasta el ${f}.`,
+  // v22: buzón de sugerencias
+  sugT: 'Buzón de sugerencias', sugTxt: '¿Qué le mejorarías a Cuadre? Lo leemos todo cada mes para decidir qué hacer.',
+  sugTipo: 'Tipo', sugTipos: { idea: 'Idea', falla: 'Algo falla', otro: 'Otro' }, sugCampo: 'Tu sugerencia',
+  sugEjemplo: 'Ej.: que me avise cuando una tarjeta esté por vencer', sugEnviar: 'Enviar',
+  sugPrivado: 'No escribas montos, números de cuenta ni datos personales. Tus finanzas no se envían: solo este texto.',
+  sugCorta: 'Escribe un poco más (al menos 5 letras).', sugGracias: '💡 ¡Gracias! Recibimos tu sugerencia.',
+  sugEnCola: '💡 Guardada: se enviará cuando haya internet.', sugAdminT: 'Sugerencias', sugNinguna: 'Todavía no hay sugerencias.',
+  sugRevisada: 'Revisada', sugEstados: { nueva: 'nueva', revisada: 'revisada', hecha: 'hecha' },
   miCuenta: 'Mi cuenta', cerrarSesion: 'Cerrar sesión', entrarOCrear: 'Iniciar sesión o crear cuenta', sesionCerrada: 'Sesión cerrada',
   // v14: PWA (web)
   instalarTit: 'Instalar Cuadre', instalarTxt: 'Ábrela como app, sin internet, y tus datos quedan más seguros en este teléfono.', instalar: 'Instalar', ahoraNo: 'Ahora no',

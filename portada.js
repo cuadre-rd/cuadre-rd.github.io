@@ -47,8 +47,8 @@ window.Portada = (function () {
   }
   // ---------- membresía: prueba de 30 días y planes. La app solo LEE; quien la cambia es el servidor. ----------
   const MEMB = 'cuadre-membresia', ADMIN = 'cuadre-admin', PRUEBA = 'cuadre-prueba-local', DIA = 864e5;
-  async function rest(ruta, { metodo = 'GET', cuerpo } = {}) {
-    const tok = await tokenVigente(); if (!tok) throw new Error(T.pSesionVencida);
+  async function rest(ruta, { metodo = 'GET', cuerpo, publico } = {}) {
+    const tok = (await tokenVigente()) || (publico && cfg().supabaseAnon); if (!tok) throw new Error(T.pSesionVencida);
     const r = await fetch(cfg().supabaseUrl.replace(/\/$/, '') + '/rest/v1/' + ruta, {
       method: metodo, headers: { apikey: cfg().supabaseAnon, Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' }, body: cuerpo ? JSON.stringify(cuerpo) : undefined });
     const j = await r.json().catch(() => null);
@@ -191,6 +191,10 @@ window.Portada = (function () {
     salir: olvidarCuenta, cargarMembresia, membresia,
     adminCuentas: () => rest('rpc/admin_cuentas', { metodo: 'POST', cuerpo: {} }),
     adminRegalar: (correo, meses) => rest('rpc/admin_regalar', { metodo: 'POST', cuerpo: { correo, meses } }),
+    // Buzón: cualquiera envía (con o sin cuenta); solo el administrador lee y marca (RLS en 004_sugerencias.sql).
+    enviarSugerencia: s => rest('sugerencias', { metodo: 'POST', cuerpo: s, publico: true }),
+    adminSugerencias: () => rest('sugerencias?select=id,tipo,texto,version,plataforma,estado,creado&order=creado.desc&limit=200'),
+    adminMarcar: (id, estado) => rest('sugerencias?id=eq.' + encodeURIComponent(id), { metodo: 'PATCH', cuerpo: { estado } }),
     _validar: validar,
   };
 })();

@@ -2,7 +2,7 @@
 // Las secciones Planes y Calculadora están en secciones.js (reciben el contexto W).
 (function () {
   'use strict';
-  const APP_VERSION = '21';
+  const APP_VERSION = '22';
   const L = window.Logica, T = window.T, G = window.Graficas, B = window.Boveda, PL = window.Planes, PR = window.Prestamos, S = window.Sistema;
   const $ = s => document.querySelector(s);
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -337,11 +337,34 @@
       ${conCuenta ? `<p class="nota">${T.mPronto}</p>` : `<button type="button" class="pildora oscura ancho" data-accion="cuenta-crear">${T.mCrearCuenta}</button>`}
       <div class="acciones uno"><button type="button" class="pildora" data-cerrar>${T.cerrar}</button></div>`, () => {}, { sinAcciones: true });
   }
+  // ---------- v22: buzón de sugerencias (se envía a Supabase; sin internet queda en cola y sale al volver) ----------
+  const COLA_SUG = 'cuadre-sugerencias-pendientes';
+  const leerCola = () => { try { return JSON.parse(localStorage.getItem(COLA_SUG) || '[]'); } catch { return []; } };
+  const ponerCola = c => { try { c.length ? localStorage.setItem(COLA_SUG, JSON.stringify(c)) : localStorage.removeItem(COLA_SUG); } catch { /* sin almacenamiento */ } };
+  async function enviarCola() {
+    if (!window.Portada || !Portada.hayCuentas() || !navigator.onLine) return;
+    const cola = leerCola(); if (!cola.length) return;
+    const quedan = [];
+    for (const s of cola) { try { await Portada.enviarSugerencia(s); } catch (e) { if (/fetch|network|red/i.test(e.message)) quedan.push(s); } } // un rechazo del servidor (texto inválido) no se reintenta
+    ponerCola(quedan);
+  }
+  function hojaSugerencia() {
+    const f = abrirHoja(`<h2>💡 ${T.sugT}</h2><p class="nota">${T.sugTxt}</p>
+      <div class="segmento" role="radiogroup" aria-label="${T.sugTipo}">${['idea', 'falla', 'otro'].map((t, i) => `<label><input type="radio" name="tipo" value="${t}" ${i ? '' : 'checked'}><span>${T.sugTipos[t]}</span></label>`).join('')}</div>
+      <label class="campo">${T.sugCampo}<textarea name="texto" rows="5" maxlength="1000" required minlength="5" placeholder="${T.sugEjemplo}"></textarea></label>
+      <p class="nota">${T.sugPrivado}</p>`, async () => {
+      const texto = f.texto.value.trim(); if (texto.length < 5) return T.sugCorta;
+      const s = { tipo: f.tipo.value, texto, version: APP_VERSION, plataforma: S.esApk() ? 'apk' : instalada() ? 'pwa' : 'web' };
+      ponerCola([...leerCola(), s]); await enviarCola();
+      aviso(leerCola().length ? T.sugEnCola : T.sugGracias);
+    }, { textoOk: T.sugEnviar });
+  }
   function hojaAdmin() {
     const f = abrirHoja(`<h2>🛠 ${T.adminT}</h2>
       <div class="dos"><label class="campo">${T.adminCorreo}<input name="correo" type="email" autocomplete="off"></label>
         <label class="campo">${T.adminMeses}<select name="meses">${[1, 3, 6, 12, 24, 36].map(n => `<option value="${n}" ${n === 12 ? 'selected' : ''}>${n}</option>`).join('')}</select></label></div>
       <button type="button" class="pildora oscura ancho" data-regalar>🎁 ${T.adminRegalar}</button><p class="nota" data-admin-msg role="status"></p>
+      <h3>💡 ${T.sugAdminT}</h3><ul class="lista-plana" data-sugerencias><li>${T.cargando}</li></ul>
       <h3>${T.adminCuentasT}</h3><ul class="lista-plana" data-cuentas><li>${T.cargando}</li></ul>
       <div class="acciones uno"><button type="button" class="pildora" data-cerrar>${T.cerrar}</button></div>`, () => {}, { sinAcciones: true });
     const lista = f.querySelector('[data-cuentas]'), msg = f.querySelector('[data-admin-msg]');
@@ -354,6 +377,13 @@
       Portada.adminRegalar(correo, meses).then(v => { msg.textContent = T.adminRegalado(correo, fecha(v)); f.correo.value = ''; pintarLista(); }, e => { msg.textContent = e.message; });
     };
     pintarLista();
+    const sug = f.querySelector('[data-sugerencias]');
+    const pintarSug = () => Portada.adminSugerencias().then(l => {
+      sug.innerHTML = l.length ? l.map(x => `<li class="pend"><span class="txt"><b>${esc(T.sugTipos[x.tipo] || x.tipo)} · ${fecha(x.creado)}</b><small>${esc(x.texto)}</small><small>v${esc(x.version || '?')} · ${esc(x.plataforma || '?')} · ${esc(T.sugEstados[x.estado] || x.estado)}</small></span>
+        ${x.estado === 'nueva' ? `<button type="button" class="pildora" data-marcar="${esc(x.id)}">✓ ${T.sugRevisada}</button>` : ''}</li>`).join('') : `<li>${T.sugNinguna}</li>`;
+    }, e => { sug.innerHTML = `<li>${esc(e.message)}</li>`; });
+    sug.onclick = ev => { const b = ev.target.closest('[data-marcar]'); if (b) Portada.adminMarcar(b.dataset.marcar, 'revisada').then(pintarSug, e => aviso(e.message, true)); };
+    pintarSug();
   }
 
   // ---------- ayudas ----------
@@ -964,7 +994,7 @@
         <div class="segmento" role="radiogroup" aria-label="${T.modo}">${['auto', 'claro', 'oscuro'].map(m => `<label><input type="radio" name="modo-app" value="${m}" ${(D.ajustes.modo || 'auto') === m ? 'checked' : ''}><span>${T.modos[m]}</span></label>`).join('')}</div>
       </section>
       ${window.Portada ? `<h2 class="sub">👤 ${T.miCuenta}</h2><section class="tarjeta"><p class="nota">${estadoMembresia(membresia())}</p>
-        <button class="pildora ancho" data-accion="planes">✨ ${T.mVerPlanes}</button>${membresia().admin ? `<button class="pildora oscura ancho" data-accion="admin">🛠 ${T.adminT}</button>` : ''}${Portada.sesion() ? `<p class="grande">${esc(Portada.sesion().nombre || '')}</p><small>${esc(Portada.sesion().correo || '')}</small>
+        <button class="pildora ancho" data-accion="planes">✨ ${T.mVerPlanes}</button>${Portada.hayCuentas() ? `<button class="pildora ancho" data-accion="sugerencia">💡 ${T.sugT}</button>` : ''}${membresia().admin ? `<button class="pildora oscura ancho" data-accion="admin">🛠 ${T.adminT}</button>` : ''}${Portada.sesion() ? `<p class="grande">${esc(Portada.sesion().nombre || '')}</p><small>${esc(Portada.sesion().correo || '')}</small>
         <button class="pildora ancho" data-accion="cuenta-salir">${T.cerrarSesion}</button>
         <button class="pildora peligro ancho" data-accion="cuenta-borrar">${T.borrarCuenta}</button>` : `<button class="pildora oscura ancho" data-accion="cuenta-entrar">${T.entrarOCrear}</button>`}
         <p class="nota"><a href="legal/privacidad.html">${T.pPrivacidad}</a> · <a href="legal/terminos.html">${T.pTerminos}</a></p></section>` : ''}
@@ -2034,6 +2064,7 @@
     else if (a === 'cuenta-entrar' || a === 'cuenta-crear') { if (hoja().open) hoja().close(); Portada.mostrar(a === 'cuenta-crear' ? 'registro' : 'login', { despues: () => pintar() }); }
     else if (a === 'planes') hojaPlanes();
     else if (a === 'admin') hojaAdmin();
+    else if (a === 'sugerencia') hojaSugerencia();
     else if (a === 'cuenta-salir') { Portada.salir(); pintar(); aviso(T.sesionCerrada); }
     else if (a === 'cuenta-borrar') { if (confirm(T.confirmarBorrarCuenta)) Portada.borrarCuenta().then(() => { pintar(); aviso(T.cuentaBorrada); }, e => aviso(e.message, true)); }
     else if (a === 'instalar-luego') { try { localStorage.setItem('cuadre-instalar-oculto', String(Date.now())); } catch { /* sin almacenamiento */ } pintar(); }
@@ -2145,7 +2176,7 @@
     if (D.ajustes.huella && !huellaOk) D.ajustes.huella = false;
     // Web: a quien llega por primera vez le sale la portada (registro, iniciar sesión o usar sin cuenta)
     if (window.Portada && Portada.debeMostrar(D)) Portada.mostrar('portada', { despues: () => pintar() });
-    if (window.Portada) Portada.cargarMembresia().then(() => { if (!bloqueada) pintar(); });
+    if (window.Portada) Portada.cargarMembresia().then(() => { if (!bloqueada) pintar(); }); enviarCola(); addEventListener('online', enviarCola);
     const nAuto = autoAnotar();
     if (D.ajustes.bloqueoApp && D.ajustes.candado) cerrarApp(); else { pintar(); reanudarBorrador(); }
     if (nAuto) guardar(bloqueada ? '' : T.autoAnotados(nAuto)); else actualizarWidget();
