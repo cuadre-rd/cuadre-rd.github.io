@@ -900,3 +900,11 @@ body.con-portada > nav, body.con-portada > header { visibility: hidden; }
 .p-video { width: min(300px, 80%); margin: 0 auto; padding: 10px; border-radius: 34px; background: var(--n-fondo); box-shadow: var(--n-alto); }
 .p-video video { display: block; width: 100%; aspect-ratio: 9 / 16; border-radius: 26px; background: #0B0A12; }
 .p-sub.centro { text-align: center; }
+
+/* ==================== v21: planes ==================== */
+.planes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 12px 0; }
+.plan { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; padding: 14px 6px 12px; border-radius: 18px; background: var(--sup2); border: 1px solid var(--sep); }
+.plan strong { font-size: 1.35rem; letter-spacing: -.02em; }
+.plan small { font-size: .74rem; }
+.plan.destacado { border: 2px solid var(--acento); background: color-mix(in srgb, var(--acento) 10%, var(--sup-solida)); }
+.chip-ahorro { position: absolute; top: -10px; font-size: .66rem; font-weight: 800; color: #fff; background: var(--acento); border-radius: 99px; padding: 2px 8px; white-space: nowrap; }

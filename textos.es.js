@@ -294,6 +294,18 @@ window.T = {
   pSesionVencida: 'Tu sesión venció. Inicia sesión otra vez.', borrarCuenta: 'Borrar mi cuenta',
   confirmarBorrarCuenta: '¿Borrar tu cuenta? Se eliminan del servidor tu correo, tu nombre y tu perfil. Tus finanzas siguen en este teléfono. No se puede deshacer.',
   cuentaBorrada: 'Cuenta borrada', legalTxt: 'Privacidad y términos',
+  // v21: membresía y administrador
+  mPlan: { prueba: 'Prueba gratis', anual: '1 año', bienal: '2 años', trienal: '3 años', regalo: 'Regalo' },
+  mVenceEn: (d, prueba) => `⏳ ${prueba ? 'Tu prueba gratis' : 'Tu plan'} vence en ${d} día${d === 1 ? '' : 's'} · Ver planes`,
+  mVencida: '🔒 Tu plan venció: puedes ver y respaldar tus datos. Para anotar, elige un plan.',
+  mEstado: (p, d, v) => (d > 0 ? `${p} · vence el ${v} (${d} día${d === 1 ? '' : 's'})` : `${p} · venció el ${v}`),
+  mPlanesT: 'Elige tu plan', mVencidaTxt: 'Tus datos están a salvo: puedes verlos, exportarlos y respaldarlos. Para seguir anotando, elige un plan.',
+  mPorAnio: x => `US$${x} por año`, mConviene: 'El que más conviene', mCrearCuenta: 'Crear mi cuenta para elegir un plan',
+  mPronto: 'Muy pronto podrás pagar aquí con PayPal (tarjeta o cuenta PayPal). Mientras, escríbenos a cuadre.app.rd@gmail.com.',
+  mVerPlanes: 'Ver planes', mSinCuenta: 'Sin cuenta', adminT: 'Administración',
+  adminCorreo: 'Correo de la cuenta', adminMeses: 'Meses de regalo', adminRegalar: 'Regalar meses', adminCuentasT: 'Cuentas',
+  adminVence: 'vence', adminSinCuentas: 'Todavía no hay cuentas.', cargando: 'Cargando…',
+  adminRegalado: (c, f) => `🎁 Listo: ${c} tiene Cuadre hasta el ${f}.`,
   miCuenta: 'Mi cuenta', cerrarSesion: 'Cerrar sesión', entrarOCrear: 'Iniciar sesión o crear cuenta', sesionCerrada: 'Sesión cerrada',
   // v14: PWA (web)
   instalarTit: 'Instalar Cuadre', instalarTxt: 'Ábrela como app, sin internet, y tus datos quedan más seguros en este teléfono.', instalar: 'Instalar', ahoraNo: 'Ahora no',

@@ -2,7 +2,7 @@
 // Las secciones Planes y Calculadora están en secciones.js (reciben el contexto W).
 (function () {
   'use strict';
-  const APP_VERSION = '20';
+  const APP_VERSION = '21';
   const L = window.Logica, T = window.T, G = window.Graficas, B = window.Boveda, PL = window.Planes, PR = window.Prestamos, S = window.Sistema;
   const $ = s => document.querySelector(s);
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -319,6 +319,43 @@
     navigator.serviceWorker.addEventListener('controllerchange', () => { if (pidioVersion && !recargando) { recargando = true; location.reload(); } });
   }
 
+  // ---------- membresía: aviso, solo lectura, planes y panel del administrador ----------
+  const membresia = () => (window.Portada ? Portada.membresia() : { dias: 999, vencida: false });
+  const soloLectura = () => membresia().vencida;
+  function bandaMembresia() {
+    const m = membresia();
+    if (m.admin || (!m.vencida && m.dias > 15)) return '';
+    return `<button class="banda ${m.vencida ? 'fuerte' : ''}" data-accion="planes">${m.vencida ? T.mVencida : T.mVenceEn(m.dias, m.plan === 'prueba')}</button>`;
+  }
+  const estadoMembresia = m => T.mEstado(T.mPlan[m.plan] || m.plan, m.dias, new Date(m.vence).toLocaleDateString('es-DO', { day: 'numeric', month: 'long', year: 'numeric' }));
+  function hojaPlanes() {
+    const m = membresia(), conCuenta = !!(window.Portada && Portada.sesion());
+    const planes = [['anual', 300, 1], ['bienal', 500, 2], ['trienal', 700, 3]];
+    abrirHoja(`<h2>✨ ${T.mPlanesT}</h2><p class="nota">${m.vencida ? T.mVencidaTxt : estadoMembresia(m)}</p>
+      <div class="planes">${planes.map(([p, c, a]) => `<div class="plan ${p === 'trienal' ? 'destacado' : ''}"><b>${T.mPlan[p]}</b><strong>US$${c / 100}</strong>
+        <small>${T.mPorAnio((c / 100 / a).toFixed(2))}</small>${p === 'trienal' ? `<span class="chip-ahorro">${T.mConviene}</span>` : ''}</div>`).join('')}</div>
+      ${conCuenta ? `<p class="nota">${T.mPronto}</p>` : `<button type="button" class="pildora oscura ancho" data-accion="cuenta-crear">${T.mCrearCuenta}</button>`}
+      <div class="acciones uno"><button type="button" class="pildora" data-cerrar>${T.cerrar}</button></div>`, () => {}, { sinAcciones: true });
+  }
+  function hojaAdmin() {
+    const f = abrirHoja(`<h2>🛠 ${T.adminT}</h2>
+      <div class="dos"><label class="campo">${T.adminCorreo}<input name="correo" type="email" autocomplete="off"></label>
+        <label class="campo">${T.adminMeses}<select name="meses">${[1, 3, 6, 12, 24, 36].map(n => `<option value="${n}" ${n === 12 ? 'selected' : ''}>${n}</option>`).join('')}</select></label></div>
+      <button type="button" class="pildora oscura ancho" data-regalar>🎁 ${T.adminRegalar}</button><p class="nota" data-admin-msg role="status"></p>
+      <h3>${T.adminCuentasT}</h3><ul class="lista-plana" data-cuentas><li>${T.cargando}</li></ul>
+      <div class="acciones uno"><button type="button" class="pildora" data-cerrar>${T.cerrar}</button></div>`, () => {}, { sinAcciones: true });
+    const lista = f.querySelector('[data-cuentas]'), msg = f.querySelector('[data-admin-msg]');
+    const fecha = v => (v ? fechaCorta(String(v).slice(0, 10)) : '—');
+    const pintarLista = () => Portada.adminCuentas().then(l => {
+      lista.innerHTML = l.length ? l.map(c => `<li class="pend"><span class="txt"><b>${esc(c.nombre || c.correo)}</b><small>${esc(c.correo)} · ${esc(T.mPlan[c.plan] || c.plan || '—')} · ${T.adminVence} ${fecha(c.vence)}</small></span></li>`).join('') : `<li>${T.adminSinCuentas}</li>`;
+    }, e => { lista.innerHTML = `<li>${esc(e.message)}</li>`; });
+    f.querySelector('[data-regalar]').onclick = () => {
+      const correo = f.correo.value.trim(), meses = Number(f.meses.value); if (!correo) return;
+      Portada.adminRegalar(correo, meses).then(v => { msg.textContent = T.adminRegalado(correo, fecha(v)); f.correo.value = ''; pintarLista(); }, e => { msg.textContent = e.message; });
+    };
+    pintarLista();
+  }
+
   // ---------- ayudas ----------
   const P = () => D.ajustes.monedaPrincipal;
   const oculto = () => !!D.ajustes.ocultarMontos;
@@ -481,7 +518,7 @@
     const movs = D.movimientos.filter(m => !m.borrado && m.tipo !== 'saldo').sort(L.orden).reverse().slice(0, 3);
     const queda = pr.limite - pr.usado;
     return `
-      ${avisoRespaldo()}
+      ${avisoRespaldo()}${bandaMembresia()}
       ${tarjetaInstalar()}
       <section class="hero">
         <div class="hero-top"><small>${T.patrimonio}</small>
@@ -926,7 +963,8 @@
           <i style="background:${MUESTRAS[t][0]};--m2:${MUESTRAS[t][1]}"></i><small>${T.temas[t]}</small></button>`).join('')}</div>
         <div class="segmento" role="radiogroup" aria-label="${T.modo}">${['auto', 'claro', 'oscuro'].map(m => `<label><input type="radio" name="modo-app" value="${m}" ${(D.ajustes.modo || 'auto') === m ? 'checked' : ''}><span>${T.modos[m]}</span></label>`).join('')}</div>
       </section>
-      ${window.Portada ? `<h2 class="sub">👤 ${T.miCuenta}</h2><section class="tarjeta">${Portada.sesion() ? `<p class="grande">${esc(Portada.sesion().nombre || '')}</p><small>${esc(Portada.sesion().correo || '')}</small>
+      ${window.Portada ? `<h2 class="sub">👤 ${T.miCuenta}</h2><section class="tarjeta"><p class="nota">${estadoMembresia(membresia())}</p>
+        <button class="pildora ancho" data-accion="planes">✨ ${T.mVerPlanes}</button>${membresia().admin ? `<button class="pildora oscura ancho" data-accion="admin">🛠 ${T.adminT}</button>` : ''}${Portada.sesion() ? `<p class="grande">${esc(Portada.sesion().nombre || '')}</p><small>${esc(Portada.sesion().correo || '')}</small>
         <button class="pildora ancho" data-accion="cuenta-salir">${T.cerrarSesion}</button>
         <button class="pildora peligro ancho" data-accion="cuenta-borrar">${T.borrarCuenta}</button>` : `<button class="pildora oscura ancho" data-accion="cuenta-entrar">${T.entrarOCrear}</button>`}
         <p class="nota"><a href="legal/privacidad.html">${T.pPrivacidad}</a> · <a href="legal/terminos.html">${T.pTerminos}</a></p></section>` : ''}
@@ -1013,6 +1051,7 @@
   }
 
   function hojaMov(m, tipoInicial, borrador) {
+    if (!m && soloLectura()) return hojaPlanes(); // shortcut: solo bloquea lo nuevo (movimientos y cuentas); editar lo que ya existe sigue abierto
     const cs = cuentasVivas().filter(c => !c.castigado);
     if (!cs.length) { tab = 'cuentas'; pintar(); return hojaCuenta(); }
     if (m && m.tipo === 'saldo') return hojaSaldo(cuenta(m.cuentaId), m);
@@ -1300,6 +1339,7 @@
 
   // Cuenta normal o tarjeta de crédito. De la tarjeta solo se piden los 4 últimos números y el vencimiento (MM/AA).
   function hojaCuenta(c, tipoInicial) {
+    if (!c && soloLectura()) return hojaPlanes();
     if (c && (c.tipo === 'deuda' || c.tipo === 'porCobrar')) return hojaDetallePrestamo(c);
     if (c && c.tipo === 'sam') return X.abrirSamDeCuenta(c);
     if (c && c.parDe && cuenta(c.parDe)) return hojaCuenta(cuenta(c.parDe));
@@ -1991,7 +2031,9 @@
     else if (a === 'ir-metas') ir('planes', 'metas');
     else if (a === 'exportar-csv') exportarCsv();
     else if (a === 'instalar') instalar();
-    else if (a === 'cuenta-entrar') Portada.mostrar('login', { despues: () => pintar() });
+    else if (a === 'cuenta-entrar' || a === 'cuenta-crear') { if (hoja().open) hoja().close(); Portada.mostrar(a === 'cuenta-crear' ? 'registro' : 'login', { despues: () => pintar() }); }
+    else if (a === 'planes') hojaPlanes();
+    else if (a === 'admin') hojaAdmin();
     else if (a === 'cuenta-salir') { Portada.salir(); pintar(); aviso(T.sesionCerrada); }
     else if (a === 'cuenta-borrar') { if (confirm(T.confirmarBorrarCuenta)) Portada.borrarCuenta().then(() => { pintar(); aviso(T.cuentaBorrada); }, e => aviso(e.message, true)); }
     else if (a === 'instalar-luego') { try { localStorage.setItem('cuadre-instalar-oculto', String(Date.now())); } catch { /* sin almacenamiento */ } pintar(); }
@@ -2103,6 +2145,7 @@
     if (D.ajustes.huella && !huellaOk) D.ajustes.huella = false;
     // Web: a quien llega por primera vez le sale la portada (registro, iniciar sesión o usar sin cuenta)
     if (window.Portada && Portada.debeMostrar(D)) Portada.mostrar('portada', { despues: () => pintar() });
+    if (window.Portada) Portada.cargarMembresia().then(() => { if (!bloqueada) pintar(); });
     const nAuto = autoAnotar();
     if (D.ajustes.bloqueoApp && D.ajustes.candado) cerrarApp(); else { pintar(); reanudarBorrador(); }
     if (nAuto) guardar(bloqueada ? '' : T.autoAnotados(nAuto)); else actualizarWidget();

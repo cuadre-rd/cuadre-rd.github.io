@@ -43,8 +43,37 @@ window.Portada = (function () {
     const r = await fetch(cfg().supabaseUrl.replace(/\/$/, '') + '/rest/v1/rpc/borrar_mi_cuenta', {
       method: 'POST', headers: { apikey: cfg().supabaseAnon, Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' }, body: '{}' });
     if (!r.ok) throw new Error(T.pErrorGeneral);
-    poner(SESION, null);
+    olvidarCuenta();
   }
+  // ---------- membresía: prueba de 30 días y planes. La app solo LEE; quien la cambia es el servidor. ----------
+  const MEMB = 'cuadre-membresia', ADMIN = 'cuadre-admin', PRUEBA = 'cuadre-prueba-local', DIA = 864e5;
+  async function rest(ruta, { metodo = 'GET', cuerpo } = {}) {
+    const tok = await tokenVigente(); if (!tok) throw new Error(T.pSesionVencida);
+    const r = await fetch(cfg().supabaseUrl.replace(/\/$/, '') + '/rest/v1/' + ruta, {
+      method: metodo, headers: { apikey: cfg().supabaseAnon, Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' }, body: cuerpo ? JSON.stringify(cuerpo) : undefined });
+    const j = await r.json().catch(() => null);
+    if (!r.ok) throw new Error((j && j.message) || T.pErrorGeneral);
+    return j;
+  }
+  // Lee del servidor la membresía y si es administrador. Sin internet se queda la última leída.
+  async function cargarMembresia() {
+    if (!hayCuentas() || !sesion()) return;
+    try {
+      const [m] = await rest('membresias?select=plan,vence');
+      if (m) poner(MEMB, JSON.stringify({ plan: m.plan, vence: Date.parse(m.vence), revisado: Date.now() }));
+      poner(ADMIN, (await rest('rpc/es_admin', { metodo: 'POST', cuerpo: {} })) === true ? '1' : null);
+    } catch (e) { console.warn('membresia', e.message); }
+  }
+  // Con cuenta: la del servidor. Sin cuenta: 30 días desde el primer uso en este teléfono.
+  // shortcut: la prueba sin cuenta se puede reiniciar borrando los datos del navegador (y con ellos sus finanzas); la de la cuenta no.
+  function membresia() {
+    const ahora = Date.now(); let m = null;
+    if (sesion()) { try { m = JSON.parse(leer(MEMB) || 'null'); } catch { m = null; } }
+    if (!m) { let ini = Number(leer(PRUEBA)); if (!ini) { ini = ahora; poner(PRUEBA, String(ini)); } m = { plan: 'prueba', vence: ini + 30 * DIA, local: true }; }
+    const admin = !!sesion() && leer(ADMIN) === '1', dias = Math.ceil((m.vence - ahora) / DIA);
+    return { ...m, dias, admin, vencida: dias <= 0 && !admin };
+  }
+  const olvidarCuenta = () => { poner(SESION, null); poner(MEMB, null); poner(ADMIN, null); };
   const errorTxt = e => (/invalid login|invalid_grant|credentials/i.test(e.message) ? T.pErrorClave : /already|registered|exists/i.test(e.message) ? T.pYaExiste
     : /fetch|network|failed/i.test(e.message) ? T.pSinInternet : T.pErrorGeneral);
   const guardarSesion = j => poner(SESION, JSON.stringify({ correo: j.user && j.user.email, nombre: j.user && j.user.user_metadata && j.user.user_metadata.nombre,
@@ -136,7 +165,7 @@ window.Portada = (function () {
       } else if (vista === 'recuperar') {
         await auth('recover', { email: d.correo }); mensaje('sobre', T.pRecuperarT, T.pRecuperarListo(d.correo));
       } else {
-        guardarSesion(await auth('token?grant_type=password', { email: d.correo, password: d.clave })); entrar();
+        guardarSesion(await auth('token?grant_type=password', { email: d.correo, password: d.clave })); await cargarMembresia(); entrar();
       }
     } catch (e) { err.textContent = errorTxt(e); }
     finally { b.disabled = false; b.classList.remove('cargando'); }
@@ -159,7 +188,9 @@ window.Portada = (function () {
   return {
     debeMostrar, sesion, hayCuentas, borrarCuenta,
     mostrar(vista, { despues } = {}) { if (despues) alEntrar = despues; pintar(vista || 'portada'); },
-    salir() { poner(SESION, null); },
+    salir: olvidarCuenta, cargarMembresia, membresia,
+    adminCuentas: () => rest('rpc/admin_cuentas', { metodo: 'POST', cuerpo: {} }),
+    adminRegalar: (correo, meses) => rest('rpc/admin_regalar', { metodo: 'POST', cuerpo: { correo, meses } }),
     _validar: validar,
   };
 })();
