@@ -897,3 +897,6 @@ body.con-portada > nav, body.con-portada > header { visibility: hidden; }
 .p-ojo svg { width: 22px; height: 22px; color: var(--n-suave); }
 .p-legal { font-size: .85rem; color: var(--n-suave); margin: 2px 0 0; line-height: 1.4; }
 .p-legal a, .p-pie a { color: var(--n-azul); font-weight: 600; }
+.p-video { width: min(300px, 80%); margin: 0 auto; padding: 10px; border-radius: 34px; background: var(--n-fondo); box-shadow: var(--n-alto); }
+.p-video video { display: block; width: 100%; aspect-ratio: 9 / 16; border-radius: 26px; background: #0B0A12; }
+.p-sub.centro { text-align: center; }

@@ -71,7 +71,9 @@ window.Portada = (function () {
         <ul class="p-checks"><li>✓ ${T.pCheck1}</li><li>✓ ${T.pCheck2}</li><li>✓ ${T.pCheck3}</li></ul>
         <div class="p-telefono"><img src="capturas/inicio.jpg" alt="${T.pCapturaAlt}" loading="lazy" width="780" height="1732"></div>
       </section>
+      <section class="p-seccion"><h2>${T.pTrailerT}</h2><div class="p-video"><video controls playsinline preload="none" poster="video/trailer.jpg" aria-label="${T.pTrailerT}"><source src="video/trailer.mp4" type="video/mp4"></video></div></section>
       <section class="p-seccion"><h2>${T.pQueHace}</h2><ul class="p-funciones">${fx}</ul></section>
+      <section class="p-seccion"><h2>${T.pFuncionesT}</h2><p class="p-sub centro">${T.pFuncionesSub}</p><div class="p-video"><video controls playsinline preload="none" poster="video/funciones.jpg" aria-label="${T.pFuncionesT}"><source src="video/funciones.mp4" type="video/mp4"></video></div></section>
       <section class="p-seccion p-caja p-privado"><span class="p-ico">🔒</span><div><b>${T.pPrivadoT}</b><p>${T.pPrivado}</p></div></section>
       <section class="p-seccion"><h2>${T.pComoEmpezar}</h2><ol class="p-pasos">${pasos}</ol>
         <button class="p-boton azul ancho" data-p="instalar">⬇ ${T.pInstalar}</button>

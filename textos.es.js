@@ -289,6 +289,7 @@ window.T = {
   pErrorClave: 'El correo o la contraseña no coinciden.', pYaExiste: 'Ese correo ya tiene cuenta. Inicia sesión.', pSinInternet: 'Sin internet: inténtalo cuando tengas conexión.', pErrorGeneral: 'No se pudo. Inténtalo otra vez.',
   pPronto: 'Las cuentas llegan muy pronto. Mientras, usa Cuadre sin cuenta: tus datos quedan en tu teléfono.',
   pConfirmaT: 'Revisa tu correo', pConfirma: c => `Te enviamos un enlace a ${c} para confirmar tu cuenta.`, pRecuperarT: 'Enlace enviado', pRecuperarListo: c => `Si ${c} tiene cuenta, te llegará un enlace para cambiar la contraseña.`,
+  pTrailerT: 'Mira Cuadre en 40 segundos', pFuncionesT: 'Todas sus funciones', pFuncionesSub: 'Las 19 cosas que puedes hacer con Cuadre, en poco más de un minuto.',
   pPrivacidad: 'Privacidad', pTerminos: 'Términos', pContacto: 'Contacto', pAceptas: (t, p) => `Al crear tu cuenta aceptas los ${t} y la ${p}.`,
   pSesionVencida: 'Tu sesión venció. Inicia sesión otra vez.', borrarCuenta: 'Borrar mi cuenta',
   confirmarBorrarCuenta: '¿Borrar tu cuenta? Se eliminan del servidor tu correo, tu nombre y tu perfil. Tus finanzas siguen en este teléfono. No se puede deshacer.',
