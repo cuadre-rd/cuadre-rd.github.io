@@ -396,7 +396,7 @@ window.T = {
   // v18: portada de la web y cuentas
   pEntrar: 'Iniciar sesión', pChip: 'Gratis · sin anuncios · sin internet', pTitulo1: 'Tu dinero,', pTitulo2: 'cuadrado.',
   pSub: 'Anota tus gastos en segundos, mira a dónde se va tu dinero y llega a tus metas. En RD$ y US$.',
-  pEmpezar: 'Crear mi cuenta gratis', pTengoCuenta: 'Ya tengo cuenta', pCheck1: 'Funciona sin internet', pCheck2: 'Tus datos se quedan en tu teléfono', pCheck3: 'iPhone, Android y PC',
+  pEmpezar: 'Crear mi cuenta gratis', pTengoCuenta: 'Ya tengo cuenta', pCheck1: 'Funciona sin internet', pCheck2: 'Tus datos cifrados: ni nosotros los vemos', pCheck3: 'Teléfono y PC sincronizados',
   pCapturaAlt: 'Así se ve Cuadre: saldo, gastos del mes y presupuesto', pQueHace: 'Todo lo de tu dinero, en un solo lugar',
   // v24: la portada muestra todo lo que hace Cuadre; las nuevas llevan la etiqueta «Nuevo».
   pFunciones: [['💳', 'Asesor de tarjetas', 'Te dice qué tarjeta usar hoy y cuántos días tienes para pagar sin intereses.', 1],
