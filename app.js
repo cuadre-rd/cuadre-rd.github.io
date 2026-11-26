@@ -2,7 +2,7 @@
 // Las secciones Planes y Calculadora están en secciones.js (reciben el contexto W).
 (function () {
   'use strict';
-  const APP_VERSION = '25';
+  const APP_VERSION = '26';
   const L = window.Logica, T = window.T, G = window.Graficas, B = window.Boveda, PL = window.Planes, PR = window.Prestamos, S = window.Sistema, CS = window.Consejos;
   const $ = s => document.querySelector(s);
   // v23: en Chrome de Android la página se achica con el teclado (así Guardar queda visible). Safari no conoce la clave y la marca como error.
@@ -1206,6 +1206,8 @@
         <button class="pildora peligro ancho" data-accion="borrar-todo">${T.borrarTodo}</button>
       </section>
       <p class="nota centro">🔒 ${T.privacidad}</p>
+      <h2 class="sub">🎉 ${T.historialT}</h2><section class="tarjeta"><p class="nota">${T.version} ${APP_VERSION} · ${fechaCorta(T.fechasVersion[APP_VERSION] || L.hoy())}</p>
+        <button class="pildora ancho" data-accion="historial">📜 ${T.verHistorial}</button></section>
       <p class="nota centro">${T.app} — ${T.lema} · ${T.version} ${APP_VERSION}</p>`;
   }
 
@@ -2380,6 +2382,7 @@
     else if (a === 'ir-plan') ir('planes', 'plan');
     else if (a === 'ver-movs' || a === 'ver-pend') abrirMovs('');
     else if (a === 'ir-pend') hojaPorPagar();
+    else if (a === 'historial') hojaHistorial();
     else if (a === 'hero-pag') { const c = $('[data-hero-pags]'); if (c) c.scrollTo({ left: c.clientWidth * Number(el.dataset.i), behavior: 'smooth' }); }
     else if (a === 'escanear') { hojaMov(null, 'gasto'); const b = document.querySelector('#hoja [data-foto-origen="camara"]'); if (b) b.click(); }
     else if (a === 'salud-periodo') { periodoSalud = Number(el.dataset.p); pintar(); }
@@ -2474,6 +2477,14 @@
 
   // v24: «Novedades»: al abrir una versión nueva, una hoja cuenta qué trae. Una sola vez por versión.
   // A quien empieza de cero no se le muestra. shortcut: en las pruebas automáticas (navigator.webdriver) se salta; hay una prueba que la fuerza.
+  // v25: todas las novedades por versión, con su fecha (Ajustes → Novedades y versiones).
+  function hojaHistorial() {
+    const vs = Object.keys(T.novedades).map(Number).sort((a, b) => b - a);
+    abrirHoja(`<h2>🎉 ${T.historialT}</h2><p class="nota">${T.historialTxt}</p>
+      ${vs.map((v, i) => `<details class="version" ${i === 0 ? 'open' : ''}><summary><b>${T.versionN(v)}</b>${String(v) === APP_VERSION ? ` <span class="xp-chip">${T.tuVersion}</span>` : ''}<small>${T.fechasVersion[v] ? fechaCorta(T.fechasVersion[v]) : ''}</small></summary>
+        <ul class="novedades">${T.novedades[v].map(x => `<li>${x}</li>`).join('')}</ul></details>`).join('')}
+      <div class="acciones uno"><button type="button" class="pildora" data-cerrar>${T.cerrar}</button></div>`, () => {}, { sinAcciones: true });
+  }
   function novedades() {
     if (D.ajustes.versionVista === APP_VERSION || bloqueada || navigator.webdriver) return;
     const lista = T.novedades[APP_VERSION], nuevo = !D.cuentas.length && !D.movimientos.length;

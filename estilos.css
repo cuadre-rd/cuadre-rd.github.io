@@ -1074,3 +1074,9 @@ html, body { overflow-x: clip; }
 .em-item small { opacity: .7; } .em-item.tarde small { color: var(--neg, #ff3b30); opacity: 1; }
 .em-item b { font-variant-numeric: tabular-nums; white-space: nowrap; }
 @media (prefers-reduced-motion: reduce) { .hero-puntos button::before, .hero-pags { transition: none; } }
+.version { border-top: 1px solid var(--borde, rgba(127,127,127,.2)); padding: 10px 0; }
+.version summary { display: flex; align-items: center; gap: 8px; min-height: 44px; cursor: pointer; list-style: none; }
+.version summary::-webkit-details-marker { display: none; }
+.version summary::after { content: '▾'; margin-left: 8px; opacity: .6; transition: transform .2s; } .version[open] summary::after { transform: rotate(180deg); }
+.version summary small { margin-left: auto; opacity: .7; }
+@media (prefers-reduced-motion: reduce) { .version summary::after { transition: none; } }
