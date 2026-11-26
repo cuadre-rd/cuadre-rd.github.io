@@ -74,7 +74,8 @@ window.Secciones = function (W) {
 
   // ---------- Mi plan: cómo dividir el sueldo, cuánto gastar por categoría, fondo de emergencia, proyección, consejos y logros ----------
   const CS = window.Consejos;
-  let aporteProy = null, tasaProy = 0, editandoPlan = false; // v25: con el plan aplicado, Mi plan se ve limpio hasta tocar «Editar mi plan»
+  let aporteProy = null, tasaProy = 0, editandoPlan = false, reglaVer = null, mesPres = null; const abiertos = new Set(); // v29: regla en vista previa, mes del presupuesto y secciones abiertas
+  const plegable = (id, titulo, cuerpo, extra) => `<details class="tarjeta plegable" data-pleg="${id}" ${id === 'proy' ? 'id="plan-proy"' : ''} ${abiertos.has(id) ? 'open' : ''}><summary><h2>${titulo}</h2>${extra || ''}</summary>${cuerpo}</details>`; // v25: con el plan aplicado, Mi plan se ve limpio hasta tocar «Editar mi plan»
   function vPlan() {
     const d = D(), p = CS.plan(d, L.hoy()), P = W.P(), pres = d.ajustes.presupuestos || {};
     const ciudades = Object.keys(CS.CIUDADES[d.ajustes.pais] || {});
@@ -101,50 +102,101 @@ window.Secciones = function (W) {
       ${vivos('fijos').length ? '' : `<section class="tarjeta pide-fijos"><p>📌 ${T.pideFijos}</p><button class="pildora oscura ancho" data-accion="fijo-nuevo">➕ ${T.agregarFijo}</button></section>`}`;
     return `${cabeza}
       ${vAlcanza(d)}${vRecortes(d)}
-      ${listo ? '' : `<section class="tarjeta">
-        <h2>🧭 ${T.comoDividir}</h2>
-        <div class="reglas">${Object.keys(CS.REGLAS).map(r => `<button class="regla ${r === p.regla ? 'sel' : ''}" data-accion="plan-regla" data-regla="${r}">
-          <b>${r}</b><small>${T.reglas[r]}</small>${r === p.sugerida ? `<i>${T.sugerida}</i>` : ''}</button>`).join('')}</div>
-        <p class="nota">${T.reglaPorQue[p.sugerida]}</p>
-        <div class="barra-grupos" aria-hidden="true">${['necesidades', 'deseos', 'ahorro'].map(k => `<i style="flex:${p.porcentajes[k]};background:${colores[k]}"></i>`).join('')}</div>
-        <div class="grupos">${['necesidades', 'deseos', 'ahorro'].map(k => `<div><small><i style="background:${colores[k]}"></i>${T.grupos[k]} · ${p.porcentajes[k]} %</small><b>${din(p.grupos[k])}</b></div>`).join('')}</div>
-      </section>`}
+      ${listo ? '' : vDividir(d, p, colores)}
       <section class="tarjeta">
         <h2 id="mi-presupuesto">🎯 ${T.presupuestoPlanT}</h2><p class="nota">${T.presupuestoPlanTxt}</p>
         ${['necesidades', 'deseos'].map(gr => `<h3>${T.grupos[gr]}</h3><ul class="lista-plana plan-cats">${p.filas.filter(f => f.grupo === gr).map(f => `<li class="${f.estado}${listo ? '' : ' tocable'}" ${listo ? '' : `data-plan-fila="${esc(f.id)}"`}>
           <span class="ico" style="--c:${cat(f.id).color}">${cat(f.id).icono}</span><span class="txt"><b>${esc(catNombre(f.id))}</b><small>${f.propio ? T.pagasReal(din(f.real)) : f.fijo ? T.pagoFijoReal(din(f.real)) : T.gastasPromedio + ' ' + din(f.real)}</small></span>
           <span class="plan-monto"><b>${din(pres[f.id] || f.sugerido)}</b><small>${pres[f.id] ? T.tuLimite : T.sugeridoCorto}</small><small class="estado-${f.estado}">${estadoIco[f.estado]} ${T.estadoPlan[f.estado]}</small></span>
-          <div class="plan-edit" hidden><div class="dos"><label class="campo">${T.miMontoReal} (${sim(W.P())})<input data-plan-real="${esc(f.id)}" inputmode="decimal" autocomplete="off" value="${f.propio ? aInput(f.real) : ''}" placeholder="${aInput(f.real) || '0.00'}"></label>
-            <label class="campo">${T.miLimite} (${sim(W.P())})<input data-plan-limite="${esc(f.id)}" inputmode="decimal" autocomplete="off" value="${pres[f.id] ? aInput(pres[f.id]) : ''}" placeholder="${aInput(f.sugerido) || '0.00'}"></label></div>
-            <small class="nota">${T.miMontoRealTxt}</small><button type="button" class="enlace peligro" data-plan-nouso="${esc(f.id)}">🙈 ${T.noUsoCat}</button></div></li>`).join('')}</ul>`).join('')}
+          <div class="plan-edit" hidden><label class="campo">${T.pagoMes} (${sim(W.P())})<input data-plan-limite="${esc(f.id)}" inputmode="decimal" autocomplete="off" value="${pres[f.id] ? aInput(pres[f.id]) : ''}" placeholder="${aInput(f.sugerido) || '0.00'}"></label>
+            <small class="nota">${T.pagoMesTxt}</small><button type="button" class="enlace peligro" data-plan-nouso="${esc(f.id)}">🙈 ${T.noUsoCat}</button></div></li>`).join('')}</ul>`).join('')}
         ${p.costo === 'alto' ? `<p class="nota">🏠 ${T.topeVivienda(din(p.topeVivienda), CS.VIVIENDA[p.costo])}</p>` : ''}
         ${listo ? `<p class="nota">✅ ${T.planListoPres}</p>` : `<p class="nota">✏️ ${T.planTocaCat}</p>
         <button class="pildora ancho" data-accion="cat-nueva-plan">➕ ${T.agregarCatPlan}</button>
         <button class="pildora oscura ancho" data-accion="plan-aplicar">${d.ajustes.planAplicado ? T.guardarPlan : T.usarComoPresupuesto}</button>
         <p class="nota">${T.presupuestoEsPlan}</p>`}
       </section>
-      <section class="tarjeta">
-        <h2>🛟 ${T.fondoTitulo}</h2>
+      ${vPresMes(d, p, pres)}
+      ${plegable('fondo', '🛟 ' + T.fondoTitulo, `
         <div class="salud-top">${W.G.anillo(p.fondo.pct, { tam: 92, grosor: 10, clase: p.fondo.pct >= 1 ? 'verde' : p.fondo.pct >= 0.5 ? 'amarillo' : 'rojo', centro: `<b>${Math.round(p.fondo.pct * 100)}%</b>` })}
           <div><p class="grande">${din(p.fondo.tienes)} <small>/ ${din(p.fondo.meta)}</small></p><small>${T.fondoMeses(p.fondo.meses, din(p.fondo.basicos))}</small></div></div>
         <p class="nota">${p.fondo.falta ? T.fondoFalta(din(p.fondo.falta), din(p.ahorro.fondo), p.fondo.mesesParaLlegar) : T.fondoListo}</p>
         <h3>${T.repartoAhorro}</h3>
-        <div class="desglose">${Object.entries(p.ahorro).filter(([, v]) => v > 0).map(([k, v]) => `<div><small>${T.destinoAhorro[k]}</small><b>${din(v)}</b></div>`).join('')}</div>
-      </section>
-      <section class="tarjeta" id="plan-proy">
-        <h2>📈 ${T.siAhorras}</h2>
+        <div class="desglose">${Object.entries(p.ahorro).filter(([, v]) => v > 0).map(([k, v]) => `<div><small>${T.destinoAhorro[k]}</small><b>${din(v)}</b></div>`).join('')}</div>`, `<small class="pleg-res">${Math.round(p.fondo.pct * 100)}%</small>`)}
+      ${plegable('proy', '📈 ' + T.siAhorras, `
         <label class="deslizador"><span>${T.ahorroAlMes}: <b data-ap>${din(ap)}</b></span>
           <input type="range" id="plan-aporte" min="0" max="${Math.max(100, Math.round(p.ingreso.monto / 100 / 2))}" step="100" value="${Math.round(ap / 100)}"></label>
         <div class="segmento chico" role="radiogroup" aria-label="${T.tasaAhorroProy}">${[0, 4, 8].map(t => `<label><input type="radio" name="plan-tasa" value="${t}" ${tasaProy === t ? 'checked' : ''}><span>${t ? t + ' %' : T.sinInteres}</span></label>`).join('')}</div>
         <div class="proy-anios" data-proy>${proyHtml(pr)}</div>
-        ${W.G.linea(pr.serie, { id: 'gpp' })}
-      </section>
-      <section class="tarjeta">
-        <h2>💡 ${T.consejosPara(esc(d.ajustes.ciudad || T.paises[d.ajustes.pais]))}</h2>
+        ${W.G.linea(pr.serie, { id: 'gpp' })}`)}
+      ${plegable('consejos', '💡 ' + T.consejosPara(esc(d.ajustes.ciudad || T.paises[d.ajustes.pais])), `
         <ul class="consejos">${consejos.map(c => `<li>${c}</li>`).join('')}</ul>
-        <p class="nota">${T.avisoConsejos}</p>
-      </section>
-      ${vLogros(lg)}`;
+        <p class="nota">${T.avisoConsejos}</p>`)}
+      ${plegable('logros', '🏆 ' + T.misLogros, logrosHtml(lg), `<small class="pleg-res">${lg.hechos}/${lg.total}</small>`)}`;
+  }
+  // v29: la regla no se aplica sola: tocarla es una vista previa; «Aplicar» la guarda. Arriba, cómo repartes hoy.
+  function repartoHoy(p) {
+    const I = p.ingreso.monto, suma = gr => p.filas.filter(f => f.grupo === gr).reduce((s, f) => s + f.real, 0);
+    const n = suma('necesidades'), w = suma('deseos'), base = Math.max(I, n + w) || 1;
+    const pct = { necesidades: Math.round(n * 100 / base), deseos: Math.round(w * 100 / base) };
+    pct.ahorro = Math.max(0, 100 - pct.necesidades - pct.deseos);
+    let cercana = null, dist = 21; // más de 20 puntos de diferencia = un reparto propio
+    for (const [r, v] of Object.entries(CS.REGLAS)) { const x = Math.abs(v[0] - pct.necesidades) + Math.abs(v[1] - pct.deseos) + Math.abs(v[2] - pct.ahorro); if (x < dist) { dist = x; cercana = r; } }
+    return { pct, cercana, hay: n + w > 0 };
+  }
+  function vDividir(d, p, colores) {
+    const G3 = ['necesidades', 'deseos', 'ahorro'], rv = reglaVer && CS.REGLAS[reglaVer] ? reglaVer : p.regla, pv = CS.REGLAS[rv];
+    const h = repartoHoy(p), barra = pc => `<div class="barra-grupos" aria-hidden="true">${G3.map(k => `<i style="flex:${pc[k]};background:${colores[k]}"></i>`).join('')}</div>`;
+    return `<section class="tarjeta">
+        <h2>🧭 ${T.comoDividir}</h2>
+        ${h.hay ? `<div class="reparto-hoy"><small>${T.asiEstasHoy}</small>${barra(h.pct)}
+          <p class="nota">${T.repartoHoyTxt(h.pct.necesidades, h.pct.deseos, h.pct.ahorro)} ${h.cercana ? T.pareceRegla(h.cercana) : T.repartoPropio}</p></div>` : ''}
+        <p class="nota">${T.reglaOpcional}</p>
+        <div class="reglas">${Object.keys(CS.REGLAS).map(r => `<button class="regla ${r === rv ? 'sel' : ''}" data-accion="plan-regla" data-regla="${r}" aria-pressed="${r === rv}">
+          <b>${r}</b><small>${T.reglas[r]}</small>${r === d.ajustes.regla ? `<i>✓ ${T.aplicada}</i>` : r === p.sugerida ? `<i>${T.sugerida}</i>` : ''}</button>`).join('')}</div>
+        <p class="nota">${T.reglaPorQue[p.sugerida]}</p>
+        ${barra({ necesidades: pv[0], deseos: pv[1], ahorro: pv[2] })}
+        <div class="grupos">${G3.map((k, i) => `<div><small><i style="background:${colores[k]}"></i>${T.grupos[k]} · ${pv[i]} %</small><b>${din(Math.round(p.ingreso.monto * pv[i] / 100))}</b></div>`).join('')}</div>
+        ${rv === d.ajustes.regla ? `<p class="nota">✅ ${T.reglaYaAplicada(rv)}</p>` : `<button class="pildora oscura ancho" data-accion="plan-regla-aplicar" data-regla="${rv}">✅ ${T.aplicarRegla(rv)}</button><p class="nota">${T.aplicarReglaTxt}</p>`}
+      </section>`;
+  }
+  // v29: presupuesto por mes (diciembre no es igual a noviembre). Lo que no se cambie usa el plan general.
+  const mesMas = (m, n) => { const x = new Date(Number(m.slice(0, 4)), Number(m.slice(5, 7)) - 1 + n, 1); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}`; };
+  function vPresMes(d, p, pres) {
+    const hoyM = L.hoy().slice(0, 7), meses = [0, 1, 2].map(i => mesMas(hoyM, i)), todos = d.ajustes.presMes || {};
+    const m = meses.includes(mesPres) ? mesPres : hoyM, pm = todos[m] || {}, lm = pm.limites || {};
+    const lims = p.filas.map(f => ({ id: f.id, gen: pres[f.id] || f.sugerido, val: lm[f.id] }));
+    const totLim = lims.reduce((s, x) => s + (x.val || x.gen || 0), 0), extras = pm.extras || [], totExt = extras.reduce((s, e) => s + e.monto, 0);
+    const ing = pm.ingreso || p.ingreso.monto, cuotas = CS.alcanza(d, L.hoy()).cuotas || 0, queda = ing - totLim - totExt - cuotas;
+    const corto = x => new Date(Number(x.slice(0, 4)), Number(x.slice(5, 7)) - 1, 1).toLocaleDateString('es-DO', { month: 'long' });
+    return `<section class="tarjeta pres-mes" id="pres-mes"><h2>📅 ${T.presMesT}</h2><p class="nota">${T.presMesTxt}</p>
+      <div class="segmento chico" role="radiogroup" aria-label="${T.presMesT}">${meses.map(x => `<label><input type="radio" name="pres-mes" value="${x}" ${x === m ? 'checked' : ''}><span>${corto(x)}${todos[x] ? ' •' : ''}</span></label>`).join('')}</div>
+      <label class="campo">${T.entraEseMes(corto(m))} (${sim(W.P())})<input id="pm-ingreso" inputmode="decimal" autocomplete="off" value="${pm.ingreso ? aInput(pm.ingreso) : ''}" placeholder="${aInput(p.ingreso.monto) || '0.00'}"></label>
+      <p class="nota">${T.entraEseMesTxt}</p>
+      <details class="mas-opciones" data-pm-cats ${Object.keys(lm).length ? 'open' : ''}><summary>${T.porCategoria}${Object.keys(lm).length ? ` <small>· ${Object.keys(lm).length}</small>` : ''}</summary>
+      <ul class="lista-plana pm-cats">${lims.map(x => `<li><span class="ico" style="--c:${cat(x.id).color}">${cat(x.id).icono}</span><span class="txt"><b>${esc(catNombre(x.id))}</b></span>
+        <input data-pm-lim="${esc(x.id)}" inputmode="decimal" autocomplete="off" aria-label="${esc(catNombre(x.id))}" value="${x.val ? aInput(x.val) : ''}" placeholder="${aInput(x.gen) || '0.00'}"></li>`).join('')}</ul></details>
+      <h3>${T.extrasMes}</h3>
+      ${extras.length ? `<ul class="lista-plana pm-extras">${extras.map(e => `<li><span class="txt"><b>${esc(e.nombre)}</b></span><b>${din(e.monto)}</b><button type="button" class="enlace peligro" data-accion="pm-extra-borrar" data-id="${esc(e.id)}" aria-label="${T.borrar} ${esc(e.nombre)}">✕</button></li>`).join('')}</ul>` : `<p class="nota">${T.extrasMesTxt}</p>`}
+      <div class="dos"><label class="campo">${T.extraNombre}<input id="pm-extra-n" maxlength="40" autocomplete="off" placeholder="${T.extraEj}"></label>
+        <label class="campo">${T.monto} (${sim(W.P())})<input id="pm-extra-m" inputmode="decimal" autocomplete="off" placeholder="0.00"></label></div>
+      <button type="button" class="pildora ancho" data-accion="pm-extra">➕ ${T.agregarExtra}</button>
+      <ul class="cuenta-mes"><li><span>💼 ${T.alcCobras}</span><b>${din(ing)}</b></li><li><span>🎯 ${T.presupuesto}</span><b>− ${din(totLim)}</b></li>
+        ${totExt ? `<li><span>🎉 ${T.extrasMes}</span><b>− ${din(totExt)}</b></li>` : ''}${cuotas ? `<li><span>🏦 ${T.alcCuotas}</span><b>− ${din(cuotas)}</b></li>` : ''}
+        <li class="total ${queda < 0 ? 'mal' : ''}"><span>${queda >= 0 ? T.alcQueda : T.alcFalta}</span><b>${din(Math.abs(queda))}</b></li></ul>
+      <p class="nota">${queda >= 0 ? T.pmBien(corto(m)) : T.pmMal(corto(m))}</p>
+      ${todos[m] ? `<button type="button" class="enlace peligro" data-accion="pm-borrar">🗑️ ${T.pmBorrar(corto(m))}</button>` : ''}
+    </section>`;
+  }
+  const mesSel = () => { const r = document.querySelector('[name="pres-mes"]:checked'); return r ? r.value : L.hoy().slice(0, 7); };
+  // Cambia el presupuesto del mes elegido; si queda vacío, se borra.
+  function cambiaPm(fn, msg) {
+    const d = D(), m = mesSel(), todos = { ...(d.ajustes.presMes || {}) }, pm = { limites: {}, extras: [], ...(todos[m] || {}) };
+    pm.limites = { ...pm.limites }; pm.extras = pm.extras.slice();
+    if (fn(pm) === false) return;
+    if (!pm.ingreso) delete pm.ingreso;
+    if (pm.ingreso || Object.keys(pm.limites).length || pm.extras.length) todos[m] = pm; else delete todos[m];
+    if (Object.keys(todos).length) d.ajustes.presMes = todos; else delete d.ajustes.presMes; mesPres = m; guardar(msg || T.guardado);
   }
   // ---------- v24: ¿me alcanza el sueldo?, dónde recortar y plan para salir de deudas ----------
   const mesLargo = m => new Date(Number(m.slice(0, 4)), Number(m.slice(5, 7)) - 1, 1).toLocaleDateString('es-DO', { month: 'long', year: 'numeric' });
@@ -272,8 +324,10 @@ window.Secciones = function (W) {
   }
   const proyHtml = pr => [['anio1', 1], ['anio3', 3], ['anio5', 5]].map(([k, n]) => `<div><small>${T.enAnios(n)}</small><b>${din(pr[k], W.P(), true)}</b></div>`).join('');
   function vLogros(lg) {
-    return `<section class="tarjeta"><div class="sub-fila"><h2>🏆 ${T.misLogros}</h2><small>${lg.hechos}/${lg.total}</small></div>
-      <div class="logros">${lg.lista.map(x => `<div class="logro ${x.hecho ? 'hecho' : ''}" title="${esc(T.logros[x.id].d)}"><span>${T.logros[x.id].i}</span><small>${T.logros[x.id].t}</small></div>`).join('')}</div></section>`;
+    return `<section class="tarjeta"><div class="sub-fila"><h2>🏆 ${T.misLogros}</h2><small>${lg.hechos}/${lg.total}</small></div>${logrosHtml(lg)}</section>`;
+  }
+  function logrosHtml(lg) {
+    return `<div class="logros">${lg.lista.map(x => `<div class="logro ${x.hecho ? 'hecho' : ''}" title="${esc(T.logros[x.id].d)}"><span>${T.logros[x.id].i}</span><small>${T.logros[x.id].t}</small></div>`).join('')}</div>`;
   }
   function ubicacion(d, ciudades) {
     return `<h2>📍 ${T.dondeVives}</h2>
@@ -292,11 +346,13 @@ window.Secciones = function (W) {
       if (ev.target.closest('.plan-edit')) return;
       const e = li.querySelector('.plan-edit'); e.hidden = !e.hidden; if (!e.hidden) e.querySelector('input').focus();
     }));
-    document.querySelectorAll('[data-plan-real]').forEach(inp => inp.addEventListener('change', () => {
+    document.querySelectorAll('[data-pleg]').forEach(x => x.addEventListener('toggle', () => { if (x.open) abiertos.add(x.dataset.pleg); else abiertos.delete(x.dataset.pleg); }));
+    document.querySelectorAll('[name="pres-mes"]').forEach(r => r.onchange = () => { mesPres = r.value; W.pintar(); const e = $('#pres-mes'); if (e) e.scrollIntoView({ block: 'start' }); });
+    const pmi = $('#pm-ingreso'); if (pmi) pmi.onchange = () => { const v = pmi.value.trim(), m = v ? L.parseMonto(v) : 0; if (m === null) return aviso(T.montoInvalido, true); cambiaPm(pm => { pm.ingreso = m; }); };
+    document.querySelectorAll('[data-pm-lim]').forEach(inp => inp.onchange = () => {
       const v = inp.value.trim(), m = v ? L.parseMonto(v) : 0; if (m === null) return aviso(T.montoInvalido, true);
-      const pp = { ...(d.ajustes.planPropio || {}) }; if (m) pp[inp.dataset.planReal] = m; else delete pp[inp.dataset.planReal];
-      d.ajustes.planPropio = pp; guardar(T.guardado);
-    }));
+      cambiaPm(pm => { if (m) pm.limites[inp.dataset.pmLim] = m; else delete pm.limites[inp.dataset.pmLim]; });
+    });
     document.querySelectorAll('[data-plan-limite]').forEach(inp => inp.addEventListener('change', () => {
       const v = inp.value.trim(), m = v ? L.parseMonto(v) : 0; if (m === null) return aviso(T.montoInvalido, true);
       const pr = { ...(d.ajustes.presupuestos || {}) }; if (m) pr[inp.dataset.planLimite] = m; else delete pr[inp.dataset.planLimite];
@@ -929,7 +985,15 @@ window.Secciones = function (W) {
     const id = el.dataset.id;
     const mapa = {
       'plan-sub': () => { sub = el.dataset.sub; W.pintar(); },
-      'plan-regla': () => { D().ajustes.regla = el.dataset.regla; aporteProy = null; guardar(); },
+      'plan-regla': () => { reglaVer = el.dataset.regla; W.pintar(); },
+      'plan-regla-aplicar': () => { D().ajustes.regla = el.dataset.regla; reglaVer = null; aporteProy = null; guardar(T.reglaAplicadaAviso(el.dataset.regla)); },
+      'pm-extra': () => {
+        const n = ($('#pm-extra-n').value || '').trim(), m = L.parseMonto($('#pm-extra-m').value);
+        if (!n) return aviso(T.nombreFalta, true); if (!m) return aviso(T.montoInvalido, true);
+        cambiaPm(pm => { if (pm.extras.length >= 50) return false; pm.extras.push({ id: L.uuid(), nombre: n.slice(0, 40), monto: m }); });
+      },
+      'pm-extra-borrar': () => cambiaPm(pm => { pm.extras = pm.extras.filter(e => e.id !== id); }),
+      'pm-borrar': () => { if (!confirm(T.confirmarBorrar)) return; cambiaPm(pm => { pm.ingreso = 0; pm.limites = {}; pm.extras = []; }); },
       'plan-aplicar': aplicarPlan,
       'plan-editar': () => { editandoPlan = true; W.pintar(); window.scrollTo(0, 0); },
       'hogar-gasto': hojaGastoHogar,

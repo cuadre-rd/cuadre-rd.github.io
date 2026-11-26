@@ -2,7 +2,7 @@
 // Las secciones Planes y Calculadora están en secciones.js (reciben el contexto W).
 (function () {
   'use strict';
-  const APP_VERSION = '28';
+  const APP_VERSION = '29';
   const L = window.Logica, T = window.T, G = window.Graficas, B = window.Boveda, PL = window.Planes, PR = window.Prestamos, S = window.Sistema, CS = window.Consejos;
   const $ = s => document.querySelector(s);
   // v23: en Chrome de Android la página se achica con el teclado (así Guardar queda visible). Safari no conoce la clave y la marca como error.
@@ -688,7 +688,7 @@
           <div><small>${ico('abajo')} ${T.recibido}</small><b>${din(r.ingresos)}</b></div>
           <div><small>${ico('arriba')} ${T.gastado}</small><b>${din(r.gastos)}</b></div>
         </div>
-        <div class="hero-botones"><button class="pildora clara" data-accion="gasto">${T.gasto}</button><button class="pildora oscura" data-accion="ingreso">${T.ingreso}</button></div>
+        <div class="hero-botones"><button class="pildora clara" data-accion="ingreso">${T.ingreso}</button><button class="pildora oscura" data-accion="gasto">${T.gasto}</button></div>
       </section>
       <div class="rapidas">
         ${[['mover', 'mover', T.transferencia, 'lila'], ['ir-plan', 'brujula', T.miPlan, 'durazno'], ['escanear', 'camara', T.escanear, 'menta'], ['ir-fijos', 'calendario', T.fijos, 'rosa']]
@@ -1612,7 +1612,7 @@
       ${c ? '' : `<div class="dos">
         <label class="campo">${T.moneda}<select name="moneda">${opcionesMonedas(P())}</select></label>
         <label class="campo"><span data-et-saldo>${tipo === 'credito' ? T.debesHoy : T.saldoInicial}</span><input name="saldo" inputmode="decimal" autocomplete="off" placeholder="0.00"></label></div>`}
-      <label class="campo">${T.impuestoCuenta}<input name="impuestoPct" inputmode="decimal" autocomplete="off" value="${c && c.impuestoPct || ''}" placeholder="0.15"></label>
+      <label class="campo">${T.impuestoCuenta}<input name="impuestoPct" inputmode="decimal" autocomplete="off" value="${c && c.impuestoPct || ''}" placeholder="0.20"></label>
       <p class="nota">${T.impuestoCuentaTxt}</p>
       <div data-en-total ${!c || L.TIPOS_DINERO.includes(c.tipo) ? '' : 'hidden'}><label class="interruptor"><span>👁️ ${T.enTotalInicio}</span><input type="checkbox" name="enTotal" ${c && c.fueraTotal ? '' : 'checked'}><i></i></label>
         <p class="nota">${T.enTotalInicioTxt}</p></div>

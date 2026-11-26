@@ -288,6 +288,15 @@
     const pres = {};
     for (const [k, v] of Object.entries(out.ajustes.presupuestos || {})) if (Number.isInteger(v) && v > 0) pres[k] = v;
     out.ajustes.presupuestos = pres;
+    const presMes = {}, entero = v => Number.isInteger(v) && v > 0 && v <= 1e13;
+    for (const [m, v] of Object.entries(out.ajustes.presMes || {})) {
+      if (!/^\d{4}-\d{2}$/.test(m) || !v || typeof v !== 'object') continue;
+      const lim = {}; for (const [k, x] of Object.entries(v.limites || {})) if (esId(k) && entero(x)) lim[k] = x;
+      const extras = (Array.isArray(v.extras) ? v.extras : []).filter(e => e && typeof e.id === 'string' && typeof e.nombre === 'string' && entero(e.monto)).slice(0, 50).map(e => ({ id: e.id, nombre: e.nombre.slice(0, 40), monto: e.monto }));
+      const pm = { limites: lim, extras }; if (entero(v.ingreso)) pm.ingreso = v.ingreso;
+      if (pm.ingreso || Object.keys(lim).length || extras.length) presMes[m] = pm;
+    }
+    if (Object.keys(presMes).length) out.ajustes.presMes = presMes; else delete out.ajustes.presMes;
     const cats = Array.isArray(d.categorias) && d.categorias.length ? d.categorias : base.categorias;
     for (const c of cats) if (c && esId(c.id)) out.categorias.push({ color: '#8E8E93', ...c, borrado: !!c.borrado });
     return out;
@@ -442,8 +451,9 @@
     return out;
   }
 
+  // v29: el mes puede tener su propio presupuesto (presMes); lo que no cambió usa el general.
   function presupuesto(d, mes) {
-    const pres = d.ajustes.presupuestos || {};
+    const pm = (d.ajustes.presMes || {})[mes], pres = pm && pm.limites ? { ...(d.ajustes.presupuestos || {}), ...pm.limites } : d.ajustes.presupuestos || {};
     const gastado = flujoMes(d, mes).porCat;
     const filas = Object.entries(pres).map(([id, limite]) => ({ id, limite, gastado: gastado[id] || 0 }))
       .sort((a, b) => b.gastado / b.limite - a.gastado / a.limite);

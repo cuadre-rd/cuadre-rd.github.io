@@ -1080,3 +1080,18 @@ html, body { overflow-x: clip; }
 .version summary::after { content: '▾'; margin-left: 8px; opacity: .6; transition: transform .2s; } .version[open] summary::after { transform: rotate(180deg); }
 .version summary small { margin-left: auto; opacity: .7; }
 @media (prefers-reduced-motion: reduce) { .version summary::after { transition: none; } }
+/* v29: secciones de Mi plan que se abren y cierran con un toque */
+details.plegable > summary { display: flex; align-items: center; gap: 8px; min-height: 44px; list-style: none; color: inherit; padding: 0; }
+details.plegable > summary::-webkit-details-marker { display: none; }
+details.plegable > summary h2 { margin: 0; flex: 1; }
+details.plegable > summary::after { content: '▾'; opacity: .6; transition: transform .2s; }
+details.plegable[open] > summary::after { transform: rotate(180deg); }
+details.plegable[open] > summary { margin-bottom: 10px; }
+.pleg-res { opacity: .7; font-weight: 600; }
+.reparto-hoy { margin: 4px 0 10px; } .reparto-hoy small { opacity: .75; }
+.pm-cats li, .pm-extras li { display: flex; align-items: center; gap: 10px; }
+.pm-cats .txt, .pm-extras .txt { flex: 1; min-width: 0; }
+.pm-cats input { width: 120px; min-height: 44px; text-align: right; border-radius: 12px; border: 1px solid var(--sep); background: var(--sup2); color: var(--texto); padding: 0 10px; font-size: 1rem; }
+.pm-extras button { min-width: 44px; min-height: 44px; }
+.cuenta-mes li.total.mal b { color: var(--rojo); }
+@media (prefers-reduced-motion: reduce) { details.plegable > summary::after { transition: none; } }
