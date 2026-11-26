@@ -83,7 +83,25 @@
     return { filas, final: saldo, aportado, intereses, retenido };
   }
 
-  const api = { POR_ANIO, TIPOS, FRECUENCIAS, tasaPorCuota, tir, prestamo, cuantoMePrestan, ahorro };
+  // v27: con lo que pagas por cuota, la app saca lo que falta: el n.º de cuotas (si sabes la tasa) o la tasa (si sabes las cuotas).
+  // Devuelve {plazo, tasa} o null si la cuota no alcanza ni para los intereses.
+  function desdeCuota({ monto, cuota, tasa, periodoTasa, frecuencia, plazo, tipo }) {
+    if (!(monto > 0) || !(cuota > 0)) return null;
+    const conTasa = tasa != null && tasa !== '' && Number(tasa) >= 0 && !(Number(tasa) === 0 && plazo);
+    if (conTasa) {
+      const i = tasaPorCuota(Number(tasa) || 0, periodoTasa, frecuencia);
+      if (tipo === 'flat') { const cap = cuota - monto * i; return cap > 0 ? { plazo: Math.min(3650, Math.ceil(monto / cap)), tasa: Number(tasa) } : null; }
+      if (!i) return { plazo: Math.min(3650, Math.ceil(monto / cuota)), tasa: 0 };
+      if (cuota <= monto * i) return null;
+      return { plazo: Math.min(3650, Math.ceil(-Math.log(1 - (i * monto) / cuota) / Math.log(1 + i) - 1e-9)), tasa: Number(tasa) };
+    }
+    const n = Math.max(1, Math.round(plazo || 0)); if (!plazo) return null;
+    const r = tir(monto, Array(n).fill(cuota));
+    const pct = r * (POR_ANIO[frecuencia] || 12) / (POR_ANIO[periodoTasa] || 12) * 100;
+    return { plazo: n, tasa: Math.round(pct * 100) / 100 };
+  }
+
+  const api = { POR_ANIO, TIPOS, FRECUENCIAS, tasaPorCuota, tir, prestamo, cuantoMePrestan, ahorro, desdeCuota };
   g.Prestamos = api;
   if (typeof module !== 'undefined') module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

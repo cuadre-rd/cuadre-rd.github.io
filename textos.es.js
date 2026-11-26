@@ -111,11 +111,13 @@ window.T = {
   deudaSaldadaT: '¡Deuda saldada!', deudaSaldada: n => `🎉 ¡Saldaste ${n}! Ese pago ahora va a tu próxima deuda.`,
   ordenPago: 'Orden para pagarlas', saldadaEn: m => `saldada en ${m}`,
   // v25: fecha de cada versión (para «Novedades y versiones» en Ajustes)
-  fechasVersion: { 26: '2026-11-26', 25: '2026-11-26', 24: '2026-11-26', 23: '2026-11-25', 22: '2026-11-23', 21: '2026-11-23', 20: '2026-11-23', 19: '2026-11-22', 18: '2026-11-22', 17: '2026-11-22', 16: '2026-11-21', 13: '2026-11-19', 11: '2026-11-16', 10: '2026-11-16' },
+  fechasVersion: { 27: '2026-11-26', 26: '2026-11-26', 25: '2026-11-26', 24: '2026-11-26', 23: '2026-11-25', 22: '2026-11-23', 21: '2026-11-23', 20: '2026-11-23', 19: '2026-11-22', 18: '2026-11-22', 17: '2026-11-22', 16: '2026-11-21', 13: '2026-11-19', 11: '2026-11-16', 10: '2026-11-16' },
   historialT: 'Novedades y versiones', historialTxt: 'Todo lo que ha traído cada actualización de Cuadre, de la más nueva a la más vieja.',
   verHistorial: 'Ver novedades anteriores', tuVersion: 'Tu versión', versionN: v => `Versión ${v}`,
   novedadesT: v => `Novedades de Cuadre v${v}`, novedadesTxt: 'Esto es lo nuevo que trae esta actualización. Tus datos y saldos siguen igual.', entendido: '¡Entendido!',
   novedades: {
+    27: ['🏦 <b>Edita tus préstamos completos:</b> nombre, monto, tipo, tasa y cuotas. Escribe lo que pagas por cuota y Cuadre calcula cuántas cuotas te faltan (o la tasa). Cada tipo explica cómo baja el saldo.',
+      '✍️ <b>Más opciones a la vista:</b> al anotar, cuando eliges la subcategoría se abre solo «Más opciones (opcional)»: con quién fue, dividir el gasto o un impuesto. Llénalo solo si aplica.'],
     26: ['📜 <b>Novedades y versiones:</b> en Ajustes ves todo lo que trajo cada actualización, con su número de versión y su fecha.'],
     25: [
       '💰 <b>Tu dinero:</b> Inicio ahora muestra solo lo que tienes en tus cuentas, sin números negativos. Apaga «Sumar en Tu dinero» en las cuentas que no quieras ver.',
@@ -351,6 +353,17 @@ window.T = {
   abonoTxt: 'Para abonar de más a capital, sube el capital. Se descuenta de lo que falta.',
   castigar: 'Castigar (no me va a pagar)', confirmarCastigar: x => `Se anotará ${x} como pérdida y el préstamo pasa a «castigados». Si luego te paga algo, lo puedes registrar. ¿Seguir?`,
   castigadoEl: f => `Castigado el ${f}`, mePagoAlgo: 'Me pagó algo', prestamoSaldado: '🎉 ¡Préstamo saldado!',
+  cuotaQuePagas: 'Lo que pagas por cuota (opcional)',
+  cuotaQuePagasTxt: 'Escríbelo y Cuadre calcula el resto: cuántas cuotas te faltan si pones la tasa, o la tasa si la dejas vacía y pones las cuotas.',
+  cuotaNoAlcanza: 'Con esa cuota no alcanza ni para los intereses: revisa la cuota o la tasa.',
+  calculadoDeCuota: (n, tasa, per) => `Calculado con lo que pagas: ${n} cuotas · ${tasa} % ${per}.`,
+  editarPrestamo: 'Editar préstamo', saldoSegunTabla: 'Poner el saldo según las cuotas pagadas',
+  saldoSegunTablaTxt: s => `Hoy el saldo es ${s}. Si lo activas, el saldo pasa a ser lo que falta según la tabla; si no, el saldo no cambia.`,
+  tiposPrestamoTxt: { frances: 'Cuota fija: pagas lo mismo cada vez; al principio va más a intereses y el saldo baja poco a poco (bancos y cooperativas).',
+    aleman: 'Capital fijo: abonas lo mismo al capital y la cuota va bajando porque el interés se calcula sobre lo que falta.',
+    flat: 'Interés plano: el interés se cobra siempre sobre el monto original, aunque ya debas menos (prestamistas: «10 % mensual»).',
+    interes: 'Solo intereses: cada cuota paga solo el interés y el capital completo se paga al final (réditos).',
+    unico: 'Pago único: todo (capital e intereses) se paga de una vez al final.' },
   tiposPrestamo: { frances: 'Cuota fija', aleman: 'Capital fijo', flat: 'Interés plano', interes: 'Solo intereses', unico: 'Pago único' },
   tiposAyuda: {
     frances: 'La misma cuota siempre. Así prestan casi todos los bancos y cooperativas.',
@@ -531,7 +544,7 @@ window.T = {
     anio: { '-1': 'Año pasado', 0: 'Este año', 1: 'Próximo año' }, corte: { '-1': 'Último corte', 0: 'Desde el corte' } },
   semanaDel: x => `Semana del ${x}`, verInforme: 'Ver informe de este período', informe: 'Informe del período',
   grafBarras: 'Barras', grafDona: 'Categorías', grafLinea: 'Saldo', grafTop: 'Más grandes', netoAcumulado: 'Lo que entró menos lo que salió, acumulado.',
-  notaEj: '¿En qué fue? (ej.: almuerzo)', masOpcionesMov: 'Más opciones', dividido1: 'Dividido',
+  notaEj: '¿En qué fue? (ej.: almuerzo)', masOpcionesMov: 'Más opciones (opcional)', masOpcionesTxt: 'Llénalo solo si aplica: con quién fue, dividir el gasto o un impuesto o comisión.', dividido1: 'Dividido',
   // v11: funciones del día a día
   autoFijo: 'Anotar solo el día del pago', autoFijoTxt: 'El gasto se anota en la cuenta elegida ese día (o cuando abras la app). Empieza desde hoy.',
   autoSinCuenta: 'Elige la cuenta para anotarlo solo', autoAnotados: n => `🤖 Anoté solo ${n} pago${n === 1 ? '' : 's'} fijo${n === 1 ? '' : 's'}`,

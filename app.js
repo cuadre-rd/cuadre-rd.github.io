@@ -2,7 +2,7 @@
 // Las secciones Planes y Calculadora están en secciones.js (reciben el contexto W).
 (function () {
   'use strict';
-  const APP_VERSION = '26';
+  const APP_VERSION = '27';
   const L = window.Logica, T = window.T, G = window.Graficas, B = window.Boveda, PL = window.Planes, PR = window.Prestamos, S = window.Sistema, CS = window.Consejos;
   const $ = s => document.querySelector(s);
   // v23: en Chrome de Android la página se achica con el teclado (así Guardar queda visible). Safari no conoce la clave y la marca como error.
@@ -1319,7 +1319,7 @@
         <div data-subs class="subs"></div></fieldset>
       <label class="campo" data-lugar hidden>${T.lugar}<input name="lugar" list="lugares" maxlength="40" autocomplete="off" value="${m ? esc(m.lugar || '') : ''}"></label>
       <datalist id="lugares">${lugares.map(x => `<option value="${esc(x)}">`).join('')}</datalist>
-      <details class="mas-opciones" data-mas ${m && (m.conQuien || m.impuesto) ? 'open' : ''}><summary>${T.masOpcionesMov} <small data-mas-res></small></summary>
+      <details class="mas-opciones" data-mas ${m && (m.conQuien || m.impuesto) ? 'open' : ''}><summary>${T.masOpcionesMov} <small data-mas-res></small></summary><p class="nota">${T.masOpcionesTxt}</p>
       <fieldset class="chips" data-quien hidden><legend>${T.conQuien}</legend><div>${['', ...L.CON_QUIEN].map(q => `<label class="chip quien"><input type="radio" name="quien" value="${q}" ${(m && m.conQuien || '') === q ? 'checked' : ''}><span>${q ? T.quienIco[q] + ' ' + T.quien[q] : T.nadie}</span></label>`).join('')}</div></fieldset>
       ${m ? '' : `<div data-div-zona ${tipo === 'gasto' ? '' : 'hidden'}><label class="interruptor"><span>👥 ${T.dividirGasto}</span><input type="checkbox" name="dividir"><i></i></label>
         <div data-div hidden><label class="campo">${T.conQuienes}<input name="personas" maxlength="120" autocomplete="off" placeholder="${T.dividirEj}"></label><p class="nota" data-div-txt></p></div></div>`}
@@ -1490,7 +1490,12 @@
       if (!tr) { cajaCats().classList.remove('elegida'); cajaCats().innerHTML = chips(r.value); pintarSubs(); }
       revisar();
     });
-    f.querySelector('[data-chips]').onchange = ev => { if (ev.target.name === 'cat') { cajaCats().classList.add('elegida'); pintarSubs(); revisar(); } };
+    // v25: al terminar de elegir la categoría (o su subcategoría), «Más opciones» se abre solo: el usuario ve que existe y decide si lo llena.
+    const abrirMas = () => { const mas = f.querySelector('[data-mas]'); if (!mas.hidden) mas.open = true; };
+    f.querySelector('[data-chips]').onchange = ev => {
+      if (ev.target.name === 'cat') { cajaCats().classList.add('elegida'); pintarSubs(); revisar(); if (!f.querySelector('[data-subs] [name=sub]')) abrirMas(); }
+    };
+    f.querySelector('[data-subs]').addEventListener('change', ev => { if (ev.target.name === 'sub') abrirMas(); });
     f.querySelector('[data-chips]').addEventListener('click', ev => {
       if (ev.target.closest('[data-otra-cat]')) { cajaCats().classList.remove('elegida'); pintarSubs(); }
       else if (ev.target.name === 'cat' && !cajaCats().classList.contains('elegida')) { cajaCats().classList.add('elegida'); pintarSubs(); } // tocar la que ya venía marcada también la elige
@@ -1855,7 +1860,9 @@
   // ---------- préstamos reales: los que debo (deuda) y los que hice (porCobrar) ----------
   function camposPlan(p) {
     p = p || {};
-    return `<div class="dos">
+    return `<label class="campo">${T.cuotaQuePagas}<input name="cuotaFija" inputmode="decimal" autocomplete="off" value="${p.cuotaFija ? aInput(p.cuotaFija) : ''}" placeholder="0.00"></label>
+      <p class="nota">${T.cuotaQuePagasTxt}</p>
+      <div class="dos">
         <label class="campo">${T.tipoCalculo}<select name="tipoCalc">${PR.TIPOS.map(t => `<option value="${t}" ${(p.tipo || 'frances') === t ? 'selected' : ''}>${T.tiposPrestamo[t]}</option>`).join('')}</select></label>
         <label class="campo">${T.frecuencia}<select name="frecuencia">${PR.FRECUENCIAS.map(t => `<option value="${t}" ${(p.frecuencia || 'mensual') === t ? 'selected' : ''}>${T.frec[t]}</option>`).join('')}</select></label>
         <label class="campo">${T.tasaPct}<input name="tasa" inputmode="decimal" autocomplete="off" value="${p.tasa || ''}" placeholder="0"></label>
@@ -1863,14 +1870,22 @@
         <label class="campo">${T.plazoCuotas}<input name="plazo" type="number" min="1" max="3650" value="${p.plazo || 12}"></label>
         <label class="campo">${T.fechaPrestamo}<input type="date" name="inicio" value="${p.inicio || L.hoy()}"></label>
         <label class="campo" data-pagadas>${T.cuotasPagadas}<input name="pagadas" type="number" min="0" max="3650" value="${p.pagadas || 0}"></label>
-      </div><p class="nota" data-plan-txt></p>`;
+      </div><p class="nota" data-tipo-txt>${T.tiposPrestamoTxt[p.tipo || 'frances']}</p><p class="nota" data-plan-txt></p>`;
   }
   function leerPlan(fd, monto) {
     const tasa = String(fd.get('tasa') || '').trim() ? L.parseNum(fd.get('tasa')) : 0;
     if (tasa === null) return null;
-    const plazo = Math.max(1, Number(fd.get('plazo')) || 1);
-    return { monto, tasa, periodoTasa: fd.get('periodoTasa'), plazo, frecuencia: fd.get('frecuencia'), tipo: fd.get('tipoCalc'), inicio: fd.get('inicio') || L.hoy(),
-      pagadas: Math.min(plazo, Math.max(0, Number(fd.get('pagadas')) || 0)) };
+    let plazo = Math.max(1, Number(fd.get('plazo')) || 1), tasaF = tasa;
+    // v27: si escribió lo que paga por cuota, la app calcula las cuotas (con la tasa) o la tasa (si dejó la tasa vacía).
+    const cuotaTxt = String(fd.get('cuotaFija') || '').trim(), cuotaFija = cuotaTxt ? L.parseMonto(cuotaTxt) : undefined;
+    if (cuotaFija === null) return null;
+    if (cuotaFija) {
+      const r = PR.desdeCuota({ monto, cuota: cuotaFija, tasa: String(fd.get('tasa') || '').trim() === '' ? null : tasa, periodoTasa: fd.get('periodoTasa'), frecuencia: fd.get('frecuencia'), plazo, tipo: fd.get('tipoCalc') });
+      if (!r) return 'cuota';
+      plazo = r.plazo; tasaF = r.tasa;
+    }
+    return { monto, tasa: tasaF, periodoTasa: fd.get('periodoTasa'), plazo, frecuencia: fd.get('frecuencia'), tipo: fd.get('tipoCalc'), inicio: fd.get('inicio') || L.hoy(),
+      pagadas: Math.min(plazo, Math.max(0, Number(fd.get('pagadas')) || 0)), cuotaFija: cuotaFija || undefined };
   }
   function hojaPrestamo(dir, planInicial) {
     const esDeuda = dir === 'deuda';
@@ -1887,7 +1902,7 @@
       fd => {
         const persona = String(fd.get('persona') || '').trim(); if (!persona) return T.nombreFalta;
         const monto = L.parseMonto(fd.get('monto')); if (!monto) return T.montoInvalido;
-        const plan = leerPlan(fd, monto); if (!plan) return T.montoInvalido;
+        const plan = leerPlan(fd, monto); if (!plan) return T.montoInvalido; if (plan === 'cuota') return T.cuotaNoAlcanza;
         const d0 = fd.get('dir'), moneda = fd.get('moneda'), id = L.uuid(), t = ahora();
         D.cuentas.push({ id, nombre: persona, persona, moneda, icono: d0 === 'deuda' ? '🏦' : '🤝', tipo: d0, privada: false, plan, creado: t, editado: t, borrado: false });
         const fecha = L.hoy(), cta = fd.get('cuenta');
@@ -1908,11 +1923,7 @@
       f.querySelector('[data-pagadas]').hidden = !!f.cuenta.value;
     };
     f.cuenta.onchange = llenar;
-    const resumenPlan = () => {
-      const monto = L.parseMonto(f.monto.value), plan = monto && leerPlan(new FormData(f), monto);
-      const r = plan ? PR.prestamo(plan) : null;
-      f.querySelector('[data-plan-txt]').innerHTML = r ? T.resumenPlan(L.formato(r.cuota, f.moneda.value), r.cuotas, L.formato(r.totalInteres, f.moneda.value)) : '';
-    };
+    const resumenPlan = () => pintarResumenPlan(f, L.parseMonto(f.monto.value), f.moneda.value);
     f.querySelectorAll('[name=dir]').forEach(r => r.onchange = () => {
       const deu = r.value === 'deuda';
       f.querySelector('[data-et-persona]').textContent = deu ? T.quienTePresto : T.aQuienPrestaste;
@@ -1938,10 +1949,12 @@
         : `<button type="button" class="pildora oscura ancho" data-cuota>${deuda ? T.pagarCuota : T.cobrarCuota}</button>
            ${t ? `<button type="button" class="pildora ancho" data-tabla>${T.verTabla}</button>` : ''}
            ${!deuda && pendiente > 0 ? `<button type="button" class="pildora peligro ancho" data-castigar>🚫 ${T.castigar}</button>` : ''}`}
+      ${c.castigado ? '' : `<button type="button" class="pildora ancho" data-editar-prestamo>✏️ ${T.editarPrestamo}</button>`}
       <button type="button" class="pildora ancho" data-fijar>${T.fijarSaldo}</button>
       <button type="button" class="pildora peligro ancho" data-borrar-cuenta>${T.borrarCuenta}</button>
       <div class="acciones uno"><button type="button" class="pildora" data-cerrar>${T.cerrar}</button></div>`, () => {}, { sinAcciones: true });
     const on = (sel, fn) => { const b = f.querySelector(sel); if (b) b.onclick = fn; };
+    on('[data-editar-prestamo]', () => hojaEditarPrestamo(c));
     on('[data-cuota]', () => hojaCuota(c));
     on('[data-tabla]', () => X.hojaTabla(t, c.moneda, c.nombre));
     on('[data-castigar]', () => {
@@ -1952,6 +1965,36 @@
     on('[data-recuperar]', () => hojaRecuperar(c));
     on('[data-fijar]', () => hojaSaldo(c));
     on('[data-borrar-cuenta]', () => borrarCuenta(c));
+  }
+  // v27: resumen en vivo del plan (cuota, n.º de cuotas, intereses) y, si la app calculó algo con «lo que pagas», lo dice.
+  function pintarResumenPlan(f, monto, moneda) {
+    const plan = monto && leerPlan(new FormData(f), monto), r = plan && plan !== 'cuota' ? PR.prestamo(plan) : null;
+    const calc = plan && plan !== 'cuota' && plan.cuotaFija ? `<b>${T.calculadoDeCuota(plan.plazo, plan.tasa, T.porPeriodo[plan.periodoTasa])}</b><br>` : '';
+    f.querySelector('[data-plan-txt]').innerHTML = plan === 'cuota' ? `⚠️ ${T.cuotaNoAlcanza}` : r ? calc + T.resumenPlan(L.formato(r.cuota, moneda), r.cuotas, L.formato(r.totalInteres, moneda)) : '';
+    const tt = f.querySelector('[data-tipo-txt]'); if (tt && f.tipoCalc) tt.textContent = T.tiposPrestamoTxt[f.tipoCalc.value];
+  }
+  // v27: editar el préstamo completo (nombre, monto, tipo, tasa, cuotas, lo que pagas). El saldo no cambia salvo que lo pida.
+  function hojaEditarPrestamo(c) {
+    const p = c.plan || {}, pend = Math.abs(L.saldoCuenta(D, c.id));
+    const f = abrirHoja(`<h2>✏️ ${T.editarPrestamo}</h2>
+      <label class="campo">${c.tipo === 'deuda' ? T.quienTePresto : T.aQuienPrestaste}<input name="persona" maxlength="40" required autocomplete="off" value="${esc(c.nombre)}"></label>
+      <label class="campo">${T.montoPrestamo} (${sim(c.moneda)})<input name="monto" inputmode="decimal" autocomplete="off" value="${aInput(p.monto || pend)}" placeholder="0.00"></label>
+      ${camposPlan(c.plan ? p : { pagadas: 0 })}
+      <label class="interruptor"><span>${T.saldoSegunTabla}</span><input type="checkbox" name="ajustarSaldo"><i></i></label>
+      <p class="nota">${T.saldoSegunTablaTxt(din(pend, c.moneda))}</p>`,
+      fd => {
+        const nombre = String(fd.get('persona') || '').trim(); if (!nombre) return T.nombreFalta;
+        const monto = L.parseMonto(fd.get('monto')); if (!monto) return T.montoInvalido;
+        const plan = leerPlan(fd, monto); if (!plan) return T.montoInvalido; if (plan === 'cuota') return T.cuotaNoAlcanza;
+        Object.assign(c, { nombre, persona: nombre, plan, editado: ahora() });
+        if (fd.get('ajustarSaldo') === 'on') { // lo que falta según la tabla, tras las cuotas ya pagadas
+          const filas = PR.prestamo(plan).filas, resta = plan.pagadas ? (filas[plan.pagadas - 1] || { saldo: 0 }).saldo : monto;
+          nuevoMov({ tipo: 'saldo', cuentaId: c.id, monto: c.tipo === 'deuda' ? -resta : resta, fecha: L.hoy() });
+        }
+        guardar(T.guardado);
+      });
+    f.oninput = () => pintarResumenPlan(f, L.parseMonto(f.monto.value), c.moneda);
+    f.onchange = f.oninput; f.oninput();
   }
   function hojaCuota(c) {
     const deuda = c.tipo === 'deuda', sc = PL.siguienteCuota(D, c), pend = Math.abs(L.saldoCuenta(D, c.id));

@@ -1,6 +1,6 @@
-// Sin internet: guarda la app en caché. build.ps1 cambia v26 en cada versión.
+// Sin internet: guarda la app en caché. build.ps1 cambia v27 en cada versión.
 // Una versión nueva espera hasta que el usuario toca «Actualizar» (mensaje 'saltar'): así no se recarga a mitad de lo que anota.
-const CACHE = 'wallet-v26';
+const CACHE = 'wallet-v27';
 const ARCHIVOS = ['./', 'index.html', 'estilos.css', 'textos.es.js', 'logica.js', 'prestamos.js', 'planes.js', 'consejos.js', 'factura.js', 'boveda.js', 'graficas.js', 'db.js', 'sistema.js', 'secciones.js', 'app.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'fuentes/CascadiaMono.ttf', 'config.js', 'portada.js', 'sincro.js', 'capturas/inicio.jpg', 'legal/privacidad.html', 'legal/terminos.html'];
 // cache: 'reload' = pedir los archivos al servidor, no a la caché HTTP del navegador (GitHub Pages la guarda 10 min y la versión nueva traería archivos viejos)
 self.addEventListener('install', e => e.waitUntil(caches.open(CACHE).then(c => c.addAll(ARCHIVOS.map(u => new Request(u, { cache: 'reload' }))))));
