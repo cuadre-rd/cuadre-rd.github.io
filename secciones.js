@@ -8,7 +8,7 @@ window.Secciones = function (W) {
   const buscar = (k, id) => (D()[k] || []).find(x => x.id === id);
   const nuevo = (k, obj) => { const t = ahora(); const x = { id: L.uuid(), creado: t, editado: t, borrado: false, ...obj }; D()[k].push(x); return x; };
   let sub = 'plan';
-  const SUBS = ['plan', 'deudas', 'hogar', 'fijos', 'nomina', 'metas', 'sam', 'encargos'];
+  const SUBS = ['plan', 'deudas', 'hogar', 'fijos', 'nomina', 'metas', 'sam', 'encargos', 'mas'];
 
   // ---------- repetición (mensual, quincenal, semanal, cada N días, anual, una vez) ----------
   const DIAS_SEM = [1, 2, 3, 4, 5, 6, 0];
@@ -57,17 +57,24 @@ window.Secciones = function (W) {
   const usoCuentas = ['diaria', 'ahorro', 'inversion', 'credito'];
 
   // ---------- vista Planes ----------
+  // v25: adelante lo que usa todo el mundo; lo de casos especiales va en «Más».
+  const VISIBLES = ['plan', 'fijos', 'nomina', 'metas', 'deudas', 'mas'], EN_MAS = ['hogar', 'sam', 'encargos'];
+  function vMas() {
+    return `<section class="tarjeta"><h2>🧰 ${T.masT}</h2><p class="nota">${T.masTxt}</p><ul class="lista-plana">${EN_MAS.map(k => `<li><button class="fila-mas" data-accion="plan-sub" data-sub="${k}">
+      <span class="ico">${T.masItems[k][0]}</span><span class="txt"><b>${T.masItems[k][1]}</b><small>${T.masItems[k][2]}</small></span><span aria-hidden="true">›</span></button></li>`).join('')}</ul></section>`;
+  }
   function vPlanes() {
-    const cuerpo = { plan: vPlan, deudas: vDeudas, hogar: vHogar, fijos: vFijos, nomina: vNomina, metas: vMetas, sam: vSam, encargos: vEncargos }[sub]();
-    const idAy = { plan: 'miPlan' }[sub] || sub;
-    return `<div class="pestanas" role="tablist">${SUBS.map(s => `<button role="tab" data-accion="plan-sub" data-sub="${s}" aria-selected="${s === sub}">${T.subPlan[s]}</button>`).join('')}</div>
+    const cuerpo = { plan: vPlan, deudas: vDeudas, hogar: vHogar, fijos: vFijos, nomina: vNomina, metas: vMetas, sam: vSam, encargos: vEncargos, mas: vMas }[sub]();
+    const idAy = { plan: 'miPlan' }[sub] || sub, enMas = EN_MAS.includes(sub);
+    return `<div class="pestanas" role="tablist">${VISIBLES.map(s => `<button role="tab" data-accion="plan-sub" data-sub="${s}" aria-selected="${s === sub || (s === 'mas' && enMas)}">${T.subPlan[s]}</button>`).join('')}</div>
+      ${enMas ? `<button class="enlace" data-accion="plan-sub" data-sub="mas">${T.volverMas}</button>` : ''}
       ${T.ayuda[idAy] ? `<button class="enlace como-funciona" data-ayuda="${idAy}">❓ ${T.comoFunciona(T.subPlan[sub])}</button>` : ''}${cuerpo}`;
   }
   const vacioTxt = (txt, accion, boton) => `<section class="tarjeta centro vacia-plan"><p>${txt}</p><button class="pildora oscura" data-accion="${accion}">${ico('mas')} ${boton}</button></section>`;
 
   // ---------- Mi plan: cómo dividir el sueldo, cuánto gastar por categoría, fondo de emergencia, proyección, consejos y logros ----------
   const CS = window.Consejos;
-  let aporteProy = null, tasaProy = 0;
+  let aporteProy = null, tasaProy = 0, editandoPlan = false; // v25: con el plan aplicado, Mi plan se ve limpio hasta tocar «Editar mi plan»
   function vPlan() {
     const d = D(), p = CS.plan(d, L.hoy()), P = W.P(), pres = d.ajustes.presupuestos || {};
     const ciudades = Object.keys(CS.CIUDADES[d.ajustes.pais] || {});
@@ -80,35 +87,41 @@ window.Secciones = function (W) {
     const pr = CS.proyeccionAhorro(p.fondo.tienes, ap, tasaProy);
     const consejos = [].concat(T.consejosPais[d.ajustes.pais] || [], T.consejosCosto[p.costo] || [], T.consejosGenerales);
     const lg = CS.logros(d, L.hoy());
-    return `
+    const listo = !!d.ajustes.planAplicado && !editandoPlan;
+    const colorG = k => colores[k];
+    const cabeza = listo ? `<section class="tarjeta plan-listo"><h2>✅ ${T.planListoT}</h2><p class="nota">${T.planListoTxt(din(p.ingreso.monto), p.regla)}</p>
+        <div class="barra-grupos" aria-hidden="true">${['necesidades', 'deseos', 'ahorro'].map(k => `<i style="flex:${p.porcentajes[k]};background:${colorG(k)}"></i>`).join('')}</div>
+        <div class="grupos">${['necesidades', 'deseos', 'ahorro'].map(k => `<div><small><i style="background:${colorG(k)}"></i>${T.grupos[k]} · ${p.porcentajes[k]} %</small><b>${din(p.grupos[k])}</b></div>`).join('')}</div>
+        <button class="pildora ancho" data-accion="plan-editar">✏️ ${T.editarPlan}</button></section>` : `
       <section class="tarjeta">${ubicacion(d, ciudades)}${campoIngreso(d, p)}</section>
       <section class="tarjeta arma-plan"><h2>🧩 ${T.armaPlanT}</h2><p class="nota">${T.armaPlanTxt}</p><div class="arma-botones">
         <button class="pildora" data-accion="nomina-nueva">💼 ${T.armaNomina}</button><button class="pildora" data-accion="fijo-nuevo">📌 ${T.armaFijo}</button>
         <button class="pildora" data-accion="cat-nueva-plan">🏷️ ${T.armaCat}</button><button class="pildora" data-accion="nuevo-prestamo">🏦 ${T.armaDeuda}</button>
         <button class="pildora" data-accion="meta-nueva">🎯 ${T.armaMeta}</button></div></section>
-      ${vivos('fijos').length ? '' : `<section class="tarjeta pide-fijos"><p>📌 ${T.pideFijos}</p><button class="pildora oscura ancho" data-accion="fijo-nuevo">➕ ${T.agregarFijo}</button></section>`}
+      ${vivos('fijos').length ? '' : `<section class="tarjeta pide-fijos"><p>📌 ${T.pideFijos}</p><button class="pildora oscura ancho" data-accion="fijo-nuevo">➕ ${T.agregarFijo}</button></section>`}`;
+    return `${cabeza}
       ${vAlcanza(d)}${vRecortes(d)}
-      <section class="tarjeta">
+      ${listo ? '' : `<section class="tarjeta">
         <h2>🧭 ${T.comoDividir}</h2>
         <div class="reglas">${Object.keys(CS.REGLAS).map(r => `<button class="regla ${r === p.regla ? 'sel' : ''}" data-accion="plan-regla" data-regla="${r}">
           <b>${r}</b><small>${T.reglas[r]}</small>${r === p.sugerida ? `<i>${T.sugerida}</i>` : ''}</button>`).join('')}</div>
         <p class="nota">${T.reglaPorQue[p.sugerida]}</p>
         <div class="barra-grupos" aria-hidden="true">${['necesidades', 'deseos', 'ahorro'].map(k => `<i style="flex:${p.porcentajes[k]};background:${colores[k]}"></i>`).join('')}</div>
         <div class="grupos">${['necesidades', 'deseos', 'ahorro'].map(k => `<div><small><i style="background:${colores[k]}"></i>${T.grupos[k]} · ${p.porcentajes[k]} %</small><b>${din(p.grupos[k])}</b></div>`).join('')}</div>
-      </section>
+      </section>`}
       <section class="tarjeta">
         <h2 id="mi-presupuesto">🎯 ${T.presupuestoPlanT}</h2><p class="nota">${T.presupuestoPlanTxt}</p>
-        ${['necesidades', 'deseos'].map(gr => `<h3>${T.grupos[gr]}</h3><ul class="lista-plana plan-cats">${p.filas.filter(f => f.grupo === gr).map(f => `<li class="${f.estado} tocable" data-plan-fila="${esc(f.id)}">
+        ${['necesidades', 'deseos'].map(gr => `<h3>${T.grupos[gr]}</h3><ul class="lista-plana plan-cats">${p.filas.filter(f => f.grupo === gr).map(f => `<li class="${f.estado}${listo ? '' : ' tocable'}" ${listo ? '' : `data-plan-fila="${esc(f.id)}"`}>
           <span class="ico" style="--c:${cat(f.id).color}">${cat(f.id).icono}</span><span class="txt"><b>${esc(catNombre(f.id))}</b><small>${f.propio ? T.pagasReal(din(f.real)) : f.fijo ? T.pagoFijoReal(din(f.real)) : T.gastasPromedio + ' ' + din(f.real)}</small></span>
           <span class="plan-monto"><b>${din(pres[f.id] || f.sugerido)}</b><small>${pres[f.id] ? T.tuLimite : T.sugeridoCorto}</small><small class="estado-${f.estado}">${estadoIco[f.estado]} ${T.estadoPlan[f.estado]}</small></span>
           <div class="plan-edit" hidden><div class="dos"><label class="campo">${T.miMontoReal} (${sim(W.P())})<input data-plan-real="${esc(f.id)}" inputmode="decimal" autocomplete="off" value="${f.propio ? aInput(f.real) : ''}" placeholder="${aInput(f.real) || '0.00'}"></label>
             <label class="campo">${T.miLimite} (${sim(W.P())})<input data-plan-limite="${esc(f.id)}" inputmode="decimal" autocomplete="off" value="${pres[f.id] ? aInput(pres[f.id]) : ''}" placeholder="${aInput(f.sugerido) || '0.00'}"></label></div>
             <small class="nota">${T.miMontoRealTxt}</small><button type="button" class="enlace peligro" data-plan-nouso="${esc(f.id)}">🙈 ${T.noUsoCat}</button></div></li>`).join('')}</ul>`).join('')}
         ${p.costo === 'alto' ? `<p class="nota">🏠 ${T.topeVivienda(din(p.topeVivienda), CS.VIVIENDA[p.costo])}</p>` : ''}
-        <p class="nota">✏️ ${T.planTocaCat}</p>
+        ${listo ? `<p class="nota">✅ ${T.planListoPres}</p>` : `<p class="nota">✏️ ${T.planTocaCat}</p>
         <button class="pildora ancho" data-accion="cat-nueva-plan">➕ ${T.agregarCatPlan}</button>
-        <button class="pildora oscura ancho" data-accion="plan-aplicar">${T.usarComoPresupuesto}</button>
-        <p class="nota">${T.presupuestoEsPlan}</p>
+        <button class="pildora oscura ancho" data-accion="plan-aplicar">${d.ajustes.planAplicado ? T.guardarPlan : T.usarComoPresupuesto}</button>
+        <p class="nota">${T.presupuestoEsPlan}</p>`}
       </section>
       <section class="tarjeta">
         <h2>🛟 ${T.fondoTitulo}</h2>
@@ -313,11 +326,12 @@ window.Secciones = function (W) {
     guardar(T.catOcultadaPlan);
   }
   function aplicarPlan() {
-    const p = CS.plan(D(), L.hoy());
-    if (!confirm(T.confirmarAplicarPlan)) return;
-    D().ajustes.presupuestos = Object.fromEntries(p.filas.filter(f => f.sugerido > 0).map(f => [f.id, Math.round(f.sugerido / 10000) * 10000 || f.sugerido]));
-    D().ajustes.planAplicado = true;
-    guardar(T.planAplicado);
+    const p = CS.plan(D(), L.hoy()), ya = D().ajustes.presupuestos || {};
+    if (!D().ajustes.planAplicado && !confirm(T.confirmarAplicarPlan)) return;
+    // v25: los límites que el usuario escribió se respetan; el resto toma lo sugerido.
+    D().ajustes.presupuestos = Object.fromEntries(p.filas.filter(f => ya[f.id] || f.sugerido > 0).map(f => [f.id, ya[f.id] || Math.round(f.sugerido / 10000) * 10000 || f.sugerido]));
+    D().ajustes.planAplicado = true; editandoPlan = false;
+    guardar(T.planAplicado); window.scrollTo(0, 0);
   }
 
   // Pagos fijos
@@ -917,6 +931,7 @@ window.Secciones = function (W) {
       'plan-sub': () => { sub = el.dataset.sub; W.pintar(); },
       'plan-regla': () => { D().ajustes.regla = el.dataset.regla; aporteProy = null; guardar(); },
       'plan-aplicar': aplicarPlan,
+      'plan-editar': () => { editandoPlan = true; W.pintar(); window.scrollTo(0, 0); },
       'hogar-gasto': hojaGastoHogar,
       'hogar-gasto-borrar': () => { const g = buscar('hogarGastos', id); if (!g || !confirm(T.confirmarBorrar)) return; const t = ahora(); g.borrado = true; g.editado = t;
         const m = g.movId && D().movimientos.find(x => x.id === g.movId); if (m) { m.borrado = true; m.editado = t; } guardar(T.borrado); },

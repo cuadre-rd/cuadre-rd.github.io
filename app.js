@@ -2,7 +2,7 @@
 // Las secciones Planes y Calculadora están en secciones.js (reciben el contexto W).
 (function () {
   'use strict';
-  const APP_VERSION = '24';
+  const APP_VERSION = '25';
   const L = window.Logica, T = window.T, G = window.Graficas, B = window.Boveda, PL = window.Planes, PR = window.Prestamos, S = window.Sistema, CS = window.Consejos;
   const $ = s => document.querySelector(s);
   // v23: en Chrome de Android la página se achica con el teclado (así Guardar queda visible). Safari no conoce la clave y la marca como error.
@@ -515,7 +515,7 @@
     const vistas = { inicio: vInicio, analisis: vAnalisis, cuentas: vCuentas, ajustes: vAjustes, planes: X.vPlanes, calculadora: X.vCalculadora, cartera: vCartera };
     const v = $('#vista'); v.innerHTML = (swEspera ? `<button class="banda nueva" data-accion="actualizar">🔄 ${T.versionNueva}</button>` : '') + (vistas[tab] || vInicio)();
     if (tab !== tabPintado) { v.classList.remove('entra'); void v.offsetWidth; v.classList.add('entra'); tabPintado = tab; }
-    animarCifras(); ajustarMontos();
+    animarCifras(); ajustarMontos(); altoHero();
     const s = $('#extra'); if (s) s.oninput = () => { extraProy = Number(s.value) * 100; pintarProy(); };
     if (X.alPintar) X.alPintar(tab);
   }
@@ -565,17 +565,95 @@
     </section>`;
   }
 
-  function vPendientes() {
-    const lista = PL.pendientes(D, L.hoy());
-    if (!lista.length) return '';
-    const cuando = p => (p.dias < 0 ? T.atrasado(-p.dias) : p.dias === 0 ? T.venceHoy : T.venceEn(p.dias));
-    const boton = p => ({ fijo: T.pagar, nomina: T.registrar, tarjeta: T.pagar, cuota: T.pagar, cobro: T.cobrar, sam: T.pagar })[p.tipo];
-    return `<section class="tarjeta pendientes"><div class="sub-fila"><h2>${ico('campana')} ${T.pendientes}</h2>${lista.length > 3 ? `<button class="enlace" data-accion="ver-pend">${T.verTodo} (${lista.length})</button>` : `<small>${lista.length}</small>`}</div>
-      <ul class="lista-plana">${lista.slice(0, 3).map(p => `<li class="pend ${p.dias < 0 ? 'tarde' : p.dias <= 1 ? 'pronto' : ''}">
+  // v25: «Por pagar y cobrar» ya no ocupa Inicio: se abre al tocar «Pendiente de pago». Arriba lo que falta, abajo lo ya pagado este mes.
+  const finMes = h => h.slice(0, 8) + String(new Date(Number(h.slice(0, 4)), Number(h.slice(5, 7)), 0).getDate()).padStart(2, '0');
+  const PAGOS = ['fijo', 'cuota', 'sam', 'tarjeta', 'abono'];
+  function pendientesMes(h) {
+    const fin = finMes(h);
+    return PL.pendientes(D, h, L.diasEntre(h, fin)).filter(p => p.fecha <= fin || p.tipo === 'tarjeta');
+  }
+  function filaPend(p) {
+    const cuando = p.dias < 0 ? T.atrasado(-p.dias) : p.dias === 0 ? T.venceHoy : T.venceEn(p.dias);
+    const boton = ({ fijo: T.pagar, nomina: T.registrar, tarjeta: T.pagar, abono: T.pagar, cuota: T.pagar, cobro: T.cobrar, sam: T.pagar })[p.tipo];
+    return `<li class="pend ${p.dias < 0 ? 'tarde' : p.dias <= 1 ? 'pronto' : ''}">
         <span class="ico">${p.icono || '•'}</span>
-        <span class="txt"><b>${esc(p.tipo === 'nomina' ? T.cobrasteNomina(p.nombre) : p.nombre)}</b><small>${cuando(p)} · ${fechaCorta(p.fecha)}</small></span>
-        <span class="pend-der"><b class="monto">${din(p.monto, p.tipo === 'tarjeta' || p.tipo === 'cuota' || p.tipo === 'cobro' ? cuenta(p.id).moneda : undefined)}</b>
-        <button class="mini" data-pend="${p.tipo}|${esc(p.id)}|${p.fecha}|${p.ronda || ''}">${boton(p)}</button></span></li>`).join('')}</ul></section>`;
+        <span class="txt"><b>${esc(p.tipo === 'nomina' ? T.cobrasteNomina(p.nombre) : p.nombre)}</b><small>${cuando} · ${fechaCorta(p.fecha)}</small></span>
+        <span class="pend-der"><b class="monto">${din(p.monto, ['tarjeta', 'abono', 'cuota', 'cobro'].includes(p.tipo) ? cuenta(p.id).moneda : undefined)}</b>
+        <button class="mini" data-pend="${p.tipo}|${esc(p.id)}|${p.fecha}|${p.ronda || ''}">${boton}</button></span></li>`;
+  }
+  function pagadosMes(h) {
+    const mes = h.slice(0, 7), sam = id => (D.sams || []).find(x => x.id === id);
+    return D.movimientos.filter(m => !m.borrado && m.fecha.slice(0, 7) === mes && (
+      (m.ref && (m.ref.tipo === 'fijo' || m.ref.tipo === 'tarjeta' || (m.ref.tipo === 'sam' && String(m.ref.periodo).startsWith('p')))) ||
+      (m.tipo === 'transferencia' && !m.ref && (cuenta(m.cuentaDestinoId) || {}).tipo === 'deuda')))
+      .sort(L.orden).reverse()
+      .map(m => ({ m, nombre: m.nota || (m.ref && m.ref.tipo === 'sam' ? (sam(m.ref.id) || {}).nombre : (cuenta(m.cuentaDestinoId) || {}).nombre) || '—',
+        icono: !m.ref ? '🏦' : m.ref.tipo === 'tarjeta' ? '💳' : m.ref.tipo === 'sam' ? '🎲' : '📌' }));
+  }
+  function hojaPorPagar() {
+    const h = L.hoy(), lista = pendientesMes(h), pagar = lista.filter(p => PAGOS.includes(p.tipo)), cobrar = lista.filter(p => !PAGOS.includes(p.tipo)), hechos = pagadosMes(h);
+    abrirHoja(`<h2>📌 ${T.porPagarT}</h2><p class="nota">${T.porPagarTxt}</p>
+      <h3 class="sub-h">⏳ ${T.faltaPagar} <small>${pagar.length}</small></h3>
+      ${pagar.length ? `<ul class="lista-plana">${pagar.map(filaPend).join('')}</ul>` : `<p class="nota">${T.sinPendientes}</p>`}
+      ${cobrar.length ? `<h3 class="sub-h">💰 ${T.porCobrarT} <small>${cobrar.length}</small></h3><ul class="lista-plana">${cobrar.map(filaPend).join('')}</ul>` : ''}
+      <h3 class="sub-h">✅ ${T.yaPagado} <small>${hechos.length}</small></h3>
+      ${hechos.length ? `<ul class="lista-plana">${hechos.map(x => `<li class="pend hecho"><span class="ico">${x.icono}</span>
+        <span class="txt"><b>${esc(x.nombre)}</b><small>${T.pagadoEl} ${fechaCorta(x.m.fecha)}</small></span>
+        <span class="pend-der"><b class="monto">${din(x.m.monto, (cuenta(x.m.cuentaId) || {}).moneda)}</b><span class="ok-pago">✓</span></span></li>`).join('')}</ul>` : `<p class="nota">${T.nadaPagado}</p>`}
+      <div class="acciones uno"><button type="button" class="pildora" data-cerrar>${T.cerrar}</button></div>`, () => {}, { sinAcciones: true });
+  }
+
+  // v25: lo que debes, aparte del dinero: cada tarjeta y lo pendiente de pagar este mes (fijos, cuotas, SAM).
+  function heroDebe(hoy) {
+    const tcs = cuentasVivas().filter(c => c.tipo === 'credito' && !c.castigado && !c.privada && L.saldoCuenta(D, c.id) < 0);
+    const pend = pendientesMes(hoy).filter(p => ['fijo', 'cuota', 'sam'].includes(p.tipo)), urge = pendientesMes(hoy).filter(p => p.dias <= 0).length;
+    const totalPend = pend.reduce((s, p) => s + (p.tipo === 'cuota' ? (L.aPrincipal(D, p.monto, cuenta(p.id).moneda) || 0) : p.monto), 0);
+    const filaTc = c => `<button class="debe-fila" data-cuenta="${esc(c.id)}"><span>💳 ${T.debesTarjeta}${c.ultimos4 ? ` ••${esc(c.ultimos4)}` : ` · ${esc(c.banco || c.nombre)}`}</span><b>${din(-L.saldoCuenta(D, c.id), c.moneda)}</b></button>`;
+    return `<div class="hero-debe">${tcs.map(filaTc).join('')}
+      <button class="debe-fila" data-accion="ir-pend"><span>📌 ${T.pendientePago} <small>${urge ? `· ${T.urgentes(urge)}` : T.pendienteMes}</small></span><b>${totalPend ? din(totalPend) : '✓'}</b></button></div>`;
+  }
+
+  // v25: segunda página del hero (se desliza o se toca el punto): lo que pagas este mes, uno por uno, y cuánto te queda del sueldo.
+  function cuentasMes(hoy) {
+    const fin = finMes(hoy), items = [];
+    const tcs = cuentasVivas().filter(c => c.tipo === 'credito' && !c.castigado && !c.privada);
+    const conCorte = new Set();
+    for (const c of tcs) {
+      const ac = PL.alCorte(D, c, hoy);
+      if (!ac || !ac.limite) continue;
+      conCorte.add(c.id);
+      if (ac.falta > 0 && ac.limite <= fin) items.push({ icono: '💳', nombre: `${c.banco || c.nombre}${c.ultimos4 ? ' ••' + c.ultimos4 : ''}${c.parDe || pareja(c) ? ` (${sim(c.moneda)})` : ''}`, det: T.loDelCorte(fechaCorta(ac.limite)), monto: L.aPrincipal(D, ac.falta, c.moneda) || 0, pend: `tarjeta|${c.id}|${ac.limite}|` });
+    }
+    for (const p of pendientesMes(hoy)) {
+      if (!PAGOS.includes(p.tipo) || p.fecha > fin) continue;
+      if ((p.tipo === 'tarjeta' || p.tipo === 'abono') && conCorte.has(p.id)) continue; // ya cuenta en «lo del corte»
+      const mon = ['tarjeta', 'abono', 'cuota'].includes(p.tipo) ? cuenta(p.id).moneda : P();
+      items.push({ icono: p.icono || '•', nombre: p.nombre, det: fechaCorta(p.fecha), monto: L.aPrincipal(D, p.monto, mon) || 0, pend: `${p.tipo}|${p.id}|${p.fecha}|${p.ronda || ''}`, tarde: p.dias < 0 });
+    }
+    let entra = 0;
+    for (const n of (D.nominas || []).filter(x => !x.borrado && x.dueno !== 'pareja')) {
+      const ya = new Set(D.movimientos.filter(m => !m.borrado && m.ref && m.ref.tipo === 'nomina' && m.ref.id === n.id).map(m => m.ref.periodo));
+      const omit = new Set(n.omitidos || []);
+      for (const f of L.fechasEntre(n.rec, hoy.slice(0, 8) + '01', fin)) if (!ya.has(f) && !omit.has(f)) entra += PL.nominaNeto(n, D.ajustes.pais).neto;
+    }
+    const pagado = pagadosMes(hoy).reduce((s, x) => s + (L.aPrincipal(D, x.m.monto, (cuenta(x.m.cuentaId) || {}).moneda) || 0), 0);
+    const falta = items.reduce((s, x) => s + x.monto, 0);
+    return { items: items.sort((a, b) => b.monto - a.monto), entra, pagado, falta };
+  }
+  function heroEsteMes(hoy, dinero) {
+    const m = cuentasMes(hoy), queda = dinero + m.entra - m.falta;
+    const fila = (ico, txt, val, cls = '') => `<div class="em-fila ${cls}"><span>${ico} ${txt}</span><b>${val}</b></div>`;
+    return `<div class="hero-top"><small>${T.esteMesT}</small><button class="enlace" data-accion="ir-pend">${T.verDetalle}</button></div>
+      <strong class="em-monto em-queda ${queda < 0 ? 'neg' : ''}">${queda < 0 ? T.teFaltarian(din(-queda)) : din(queda)}</strong>
+      <small class="em-nota">${queda < 0 ? T.esteMesFalta : T.esteMesQueda}</small>
+      <div class="em-cuentas">
+        ${fila('💰', T.tuDinero, din(dinero))}
+        ${m.entra ? fila('💼', T.teEntraMes, '+' + din(m.entra), 'pos') : ''}
+        ${fila('📌', T.tePagasMes, m.falta ? '−' + din(m.falta) : '✓', m.falta ? 'neg' : '')}
+        ${m.pagado ? fila('✅', T.yaPagado, din(m.pagado), 'suave') : ''}
+      </div>
+      ${m.items.length ? `<ul class="em-lista">${m.items.slice(0, 6).map(x => `<li><button class="em-item ${x.tarde ? 'tarde' : ''}" data-pend="${esc(x.pend)}"><span>${x.icono} ${esc(x.nombre)} <small>${esc(x.det)}</small></span><b>${din(x.monto)}</b></button></li>`).join('')}
+        ${m.items.length > 6 ? `<li><button class="enlace" data-accion="ir-pend">${T.yOtros(m.items.length - 6)}</button></li>` : ''}</ul>` : `<p class="em-nota">${T.sinPendientes}</p>`}`;
   }
 
   function vInicio() {
@@ -589,18 +667,23 @@
     const restantes = rit.dias - rit.pasados + 1;
     const movs = D.movimientos.filter(m => !m.borrado && m.tipo !== 'saldo').sort(L.orden).reverse().slice(0, 3);
     const queda = pr.limite - pr.usado;
+    const din0 = L.dinero(D), otrasD = Object.entries(din0.porMoneda).filter(([m]) => m !== P());
     return `
       ${avisoRespaldo()}${bandaMembresia()}
       ${tarjetaInstalar()}
       <section class="hero">
-        <div class="hero-top"><small>${T.patrimonio}</small>
+        <div class="hero-pags" data-hero-pags><div class="hero-pag">
+        <div class="hero-top"><small>${T.tuDinero}</small>
           <button class="icono-btn" data-accion="ocultar" aria-label="${oculto() ? T.mostrar : T.ocultar}">${ico(oculto() ? 'ojoNo' : 'ojo')}</button></div>
-        <strong class="hero-monto" ${oculto() ? '' : `data-contar="${r.total}" data-mon="${P()}"`}>${din(r.total)}</strong>
+        <strong class="hero-monto" ${oculto() ? '' : `data-contar="${din0.total}" data-mon="${P()}"`}>${din(din0.total)}</strong>
         <div class="chips-hero">
-          ${otras.length ? `<span>${din(r.porMoneda[P()] || 0)}</span>` : ''}${otras.map(([m, v]) => `<span>${din(v, m)}</span>`).join('')}
+          ${otrasD.length ? `<span>${din(din0.porMoneda[P()] || 0)}</span>` : ''}${otrasD.map(([m, v]) => `<span>${din(v, m)}</span>`).join('')}
           ${D.boveda ? `<button class="chip-boveda" data-accion="${sesion ? 'bloquear' : 'desbloquear'}">${ico('candado')} ${sesion ? T.bovedaAbierta : T.bovedaOculta}</button>` : ''}
         </div>
         ${r.faltaTasa ? `<p class="hero-nota">${T.faltaTasa}</p>` : ''}
+        ${heroDebe(hoy)}
+        </div><div class="hero-pag">${heroEsteMes(hoy, din0.total)}</div></div>
+        <div class="hero-puntos" role="tablist">${[T.tuDinero, T.esteMesT].map((t, i) => `<button role="tab" data-accion="hero-pag" data-i="${i}" aria-selected="${i === 0}" aria-label="${t}"></button>`).join('')}</div>
         <div class="hero-mes">
           <div><small>${ico('abajo')} ${T.recibido}</small><b>${din(r.ingresos)}</b></div>
           <div><small>${ico('arriba')} ${T.gastado}</small><b>${din(r.gastos)}</b></div>
@@ -611,19 +694,31 @@
         ${[['mover', 'mover', T.transferencia, 'lila'], ['ir-plan', 'brujula', T.miPlan, 'durazno'], ['escanear', 'camara', T.escanear, 'menta'], ['ir-fijos', 'calendario', T.fijos, 'rosa']]
           .map(([a, i, t, c]) => `<button class="rapida ${c}" data-accion="${a}"><span class="r-ico">${ico(i, 'vivo')}</span><small>${t}</small></button>`).join('')}
       </div>
-      ${vPendientes()}
       ${panelTarjetas()}
       <section class="tarjeta pres ${pr.limite ? L.nivel(pr.pct) : ''}">
         ${pr.limite ? `${G.anillo(pr.pct, { tam: 96, grosor: 11, clase: L.nivel(pr.pct), centro: `<b>${Math.round(pr.pct * 100)}%</b>` })}
           <div class="pres-txt"><h2>${T.presupuesto}</h2>
             <p class="grande">${queda >= 0 ? T.teQuedan : T.tePasaste} <b>${din(Math.abs(queda))}</b></p>
-            <small>${T.diasRestantes(restantes)}${queda > 0 ? ` · ${din(Math.floor(queda / restantes))} ${T.porDia}` : ''}</small></div>`
+            <small>${T.diasRestantes(restantes)}${queda > 0 ? ` · ${din(Math.floor(queda / restantes))} ${T.porDia}` : ''}</small></div>
+          ${planInicio(pr)}`
         : `<div class="pres-txt"><h2>${T.presupuesto}</h2><p>${T.sinPresupuesto}</p>
             <button class="pildora oscura" data-accion="presupuesto">${T.crearPresupuesto}</button></div>`}
       </section>
       ${tarjetaGastos(r.mes)}
       <div class="sub-fila"><h2 class="sub">${T.ultimos}</h2><button class="enlace" data-accion="ver-movs">${T.verTodo}</button></div>
       ${movs.length ? `<ul class="lista">${movs.map(filaMov).join('')}</ul>` : `<p class="nota centro">${T.sinMovs}</p>`}`;
+  }
+
+  // v25: tu plan a la vista en Inicio: cada categoría con lo gastado contra su límite (las más apretadas primero).
+  function planInicio(pr) {
+    const filas = pr.filas.filter(x => x.limite > 0), ver = filas.slice(0, 5);
+    if (!ver.length) return '';
+    return `<div class="plan-inicio"><h3>🧭 ${T.tuPlanMes}</h3><ul class="lista-plana">${ver.map(x => {
+      const pct = x.gastado / x.limite;
+      return `<li><span class="ico">${cat(x.id).icono}</span><span class="txt"><b>${esc(catNombre(x.id))}</b>
+        <span class="barra-pi ${L.nivel(pct)}"><i style="width:${Math.min(100, Math.round(pct * 100))}%"></i></span></span>
+        <small class="pi-monto">${din(x.gastado)} / ${din(x.limite)}</small></li>`;
+    }).join('')}</ul><button class="enlace" data-accion="ir-plan">${filas.length > ver.length ? T.verPlanTodo(filas.length) : T.verPlanCorto} →</button></div>`;
   }
 
   // Gastos del mes: dona que se toca (o los chips de abajo) para ver una categoría y sus gastos; la lista sigue debajo.
@@ -968,14 +1063,14 @@
     const pers = (c && c.tipo === 'credito' && c.diaCorte ? ['corte'] : []).concat(PERIODOS);
     if (!pers.includes(f.per)) { f.per = 'mes'; f.off = 0; }
     const tabs = f.per === 'todos' || f.per === 'rango' ? [] : f.per === 'corte' ? [-1, 0] : [f.off - 1, f.off, f.off + 1];
-    let saldo = L.resumen(D, L.hoy()).total, mon = P(), debe = false, par = null;
+    let saldo = L.dinero(D).total, mon = P(), debe = false, par = null;
     if (c) { const s = L.saldoCuenta(D, c.id); mon = c.moneda; par = pareja(c); debe = c.tipo === 'credito' && s < 0; saldo = c.tipo === 'credito' ? Math.abs(s) : s; }
     const filtrando = f.tipo !== 'todos' || f.cat;
     return `<section class="tarjeta cartera-top">
         <div class="cartera-fila"><label class="selector-cartera">${c ? c.icono : '👛'}<select id="cartera-sel" aria-label="${T.elegirCartera}">
           <option value="">${T.todasCuentas}</option>${vis.map(x => `<option value="${esc(x.id)}" ${c && c.id === x.id ? 'selected' : ''}>${esc(x.nombre)}</option>`).join('')}</select><span aria-hidden="true">▾</span></label>
           <button class="icono-btn lupa" data-accion="buscar" aria-label="${T.buscar}" aria-pressed="${!!(f.buscar || f.texto)}">🔎</button></div>
-        <small>${c ? T[c.tipo] + (c.ultimos4 ? ' · •••• ' + esc(c.ultimos4) : '') : T.patrimonio}</small>
+        <small>${c ? T[c.tipo] + (c.ultimos4 ? ' · •••• ' + esc(c.ultimos4) : '') : T.tuDinero}</small>
         <strong class="cartera-saldo">${debe ? T.debes + ' ' : ''}${din(saldo, mon)}</strong>
         ${par ? `<small>${din(Math.abs(L.saldoCuenta(D, par.id)), par.moneda)}</small>` : ''}
         <div class="acciones-cab">${c ? `${c.tipo === 'credito' ? `<button class="pildora oscura" data-accion="cab-pagar">${T.pagarTarjeta}</button>` : ''}
@@ -1512,6 +1607,8 @@
         <label class="campo"><span data-et-saldo>${tipo === 'credito' ? T.debesHoy : T.saldoInicial}</span><input name="saldo" inputmode="decimal" autocomplete="off" placeholder="0.00"></label></div>`}
       <label class="campo">${T.impuestoCuenta}<input name="impuestoPct" inputmode="decimal" autocomplete="off" value="${c && c.impuestoPct || ''}" placeholder="0.15"></label>
       <p class="nota">${T.impuestoCuentaTxt}</p>
+      <div data-en-total ${!c || L.TIPOS_DINERO.includes(c.tipo) ? '' : 'hidden'}><label class="interruptor"><span>👁️ ${T.enTotalInicio}</span><input type="checkbox" name="enTotal" ${c && c.fueraTotal ? '' : 'checked'}><i></i></label>
+        <p class="nota">${T.enTotalInicioTxt}</p></div>
       <label class="interruptor"><span>${ico('candado')} ${T.enBoveda}</span><input type="checkbox" name="privada" ${c && c.privada ? 'checked' : ''}><i></i></label>
       ${c && c.tipo === 'credito' ? `<button type="button" class="pildora oscura ancho" data-pagar-cc>${T.pagarTarjeta}</button>` : ''}
       ${c ? `<button type="button" class="pildora ancho" data-fijar>${T.fijarSaldo}${par ? ` (${sim(c.moneda)})` : ''}</button>
@@ -1522,7 +1619,7 @@
         if (!nombre) return T.nombreFalta;
         const privada = fd.get('privada') === 'on', tp = fd.get('tipo');
         if (privada && !bovedaAbierta()) return T.necesitaBoveda;
-        const extra = { banco: String(fd.get('banco') || '').trim() || undefined };
+        const extra = { banco: String(fd.get('banco') || '').trim() || undefined, fueraTotal: L.TIPOS_DINERO.includes(tp) && fd.get('enTotal') !== 'on' ? true : undefined };
         const pctTxt = String(fd.get('impuestoPct') || '').trim();
         extra.impuestoPct = pctTxt ? L.parseNum(pctTxt) : undefined;
         if (pctTxt && (!extra.impuestoPct || extra.impuestoPct >= 100)) return T.pctInvalido;
@@ -1558,7 +1655,7 @@
           } else if (par) { par.borrado = true; par.editado = t; }
         };
         if (c) {
-          for (const k of ['banco', 'impuestoPct', 'ultimos4', 'vence', 'limite', 'diaCorte', 'diaPago', 'diseno', 'red', 'tasa']) delete c[k];
+          for (const k of ['banco', 'fueraTotal', 'impuestoPct', 'ultimos4', 'vence', 'limite', 'diaCorte', 'diaPago', 'diseno', 'red', 'tasa']) delete c[k];
           Object.assign(c, { nombre, tipo: tp, privada, editado: t, icono: c.tipo === tp ? c.icono : icono }, JSON.parse(JSON.stringify(extra)));
           sincronizar(c.id);
           return void guardar(T.guardado);
@@ -1575,6 +1672,7 @@
       });
     f.querySelectorAll('[name=tipo]').forEach(r => r.onchange = () => {
       f.querySelector('[data-cc]').hidden = r.value !== 'credito';
+      f.querySelector('[data-en-total]').hidden = !L.TIPOS_DINERO.includes(r.value);
       const e = f.querySelector('[data-et-saldo]'); if (e) e.textContent = r.value === 'credito' ? T.debesHoy : T.saldoInicial;
     });
     f.ultimos4.oninput = () => { f.ultimos4.value = f.ultimos4.value.replace(/\D/g, '').slice(0, 4); };
@@ -1629,7 +1727,7 @@
   // Pagar la tarjeta (cualquiera de sus balances si es de doble moneda), desde cualquier cuenta.
   // - Tarjeta en pesos con compras en otra moneda: con la tasa de hoy se anota la diferencia desde la compra.
   // - Balance en dólares pagado con pesos: se muestra cuánto más (o menos) cuesta que el día de cada compra.
-  function hojaPagarTarjeta(c0) {
+  function hojaPagarTarjeta(c0, abonoId) {
     const principal = c0.parDe ? cuenta(c0.parDe) : c0, par = pareja(principal);
     const balances = [principal].concat(par ? [par] : []);
     const origenes = cuentasVivas().filter(x => !balances.includes(x) && ['diaria', 'ahorro', 'inversion'].includes(x.tipo) && !x.castigado);
@@ -1638,6 +1736,7 @@
       <h2>${T.pagarTarjeta} · ${esc(principal.nombre)}</h2>
       ${balances.length > 1 ? segmento('bal', balances.map(b => [b.id, `${T.balance} ${sim(b.moneda)}`]), c0.id) : `<input type="hidden" name="bal" value="${esc(principal.id)}">`}
       <p class="nota" data-debes></p>
+      <div class="caja-info corte-info" data-corte hidden></div>
       <div class="caja-info" data-compras hidden></div>
       <label class="campo monto-campo"><span>${T.montoPagar} <span data-sim></span></span><input name="monto" inputmode="decimal" autocomplete="off" required></label>
       <label class="campo">${T.desde}<select name="cuenta">${origenes.map(x => `<option value="${esc(x.id)}">${esc(x.nombre)} (${sim(x.moneda)})</option>`).join('')}</select></label>
@@ -1648,10 +1747,18 @@
       </div>
       <p class="nota" data-dif></p>
       ${bloqueImpuesto(0)}
-      <label class="campo">${T.fecha}<input type="date" name="fecha" required value="${L.hoy()}"></label>`,
+      <label class="campo">${T.fecha}<input type="date" name="fecha" required value="${L.hoy()}"></label>
+      <p class="nota" data-ciclo></p>
+      ${abonoId ? `<button type="button" class="enlace peligro" data-quitar-abono>🗑️ ${T.quitarAbono}</button>` : ''}`,
       fd => {
         const b = cuenta(fd.get('bal')), o = cuenta(fd.get('cuenta'));
         const monto = L.parseMonto(fd.get('monto')); if (!monto) return T.montoInvalido;
+        const sinAbono = x => { if (abonoId && x.abonosProg) { x.abonosProg = x.abonosProg.filter(a => a.id !== abonoId); if (!x.abonosProg.length) delete x.abonosProg; x.editado = ahora(); } };
+        if ((fd.get('fecha') || L.hoy()) > L.hoy()) { // v25: abono a futuro: se programa y se avisa ese día; el dinero no se mueve todavía
+          sinAbono(b); b.abonosProg = (b.abonosProg || []).concat({ id: L.uuid(), fecha: fd.get('fecha'), monto }); b.editado = ahora();
+          return void guardar(T.abonoProgramado(fechaCorta(fd.get('fecha'))));
+        }
+        sinAbono(b); if (b !== principal) sinAbono(principal);
         const imp = leerImpuesto(fd); if (imp === null) return T.montoInvalido;
         const info = tasaPar(o.moneda, b.moneda), t = L.parseNum(fd.get('tasa'));
         if (o.moneda !== b.moneda && !t) return T.faltaTasaPago;
@@ -1710,6 +1817,37 @@
     f.cuenta.onchange = () => { const m = cuenta(f.cuenta.value).moneda; if (m !== monPrev) f.tasa.value = ''; monPrev = m; actualizar(false); };
     f.tasa.oninput = () => actualizar(); f.monto.oninput = () => actualizar(false);
     actualizar(true);
+    // v25: corte de la tarjeta, botones de monto y para qué pago cuenta la fecha elegida.
+    const ok = f.querySelector('button[value=ok]');
+    const ciclo = () => {
+      const b = cuenta(f.bal.value), fe = f.fecha.value || L.hoy(), ci = PL.cicloTC(principal, fe), ac = PL.alCorte(D, { ...principal, id: b.id }, L.hoy());
+      const caja = f.querySelector('[data-corte]');
+      caja.hidden = !ac;
+      if (ac) caja.innerHTML = `<small>${T.cortoEl(fechaCorta(ac.corteAnt))}: <b>${din(ac.cortado, b.moneda)}</b>${ac.abonado ? ` · ${T.yaAbonaste} <b>${din(ac.abonado, b.moneda)}</b>` : ''}</small>
+        ${ac.limite ? `<small>${ac.falta ? T.faltaAntesDe(din(ac.falta, b.moneda), fechaCorta(ac.limite)) : T.corteCubierto}</small>` : ''}
+        <div class="arma-botones">${ac.falta ? `<button type="button" class="pildora" data-m="${ac.falta}">${T.pagoAlCorte}</button>` : ''}<button type="button" class="pildora" data-m="${Math.max(0, -L.saldoCuenta(D, b.id))}">${T.todoLoQueDebo}</button></div>`;
+      const futuro = fe > L.hoy();
+      let txt = '';
+      if (futuro) txt = `📅 ${T.abonoFuturo(fechaCorta(fe))}`;
+      else if (ci && ci.limite) {
+        const enEste = fe <= ci.limite && fe > ci.corteAnt;
+        const lim = enEste ? ci.limite : L.proximaFecha({ frec: 'mensual', dia: principal.diaPago }, L.sumarDias(ci.corteSig, 1));
+        txt = `🗓️ ${T.cuentaParaPago(fechaCorta(lim), fechaCorta(enEste ? ci.corteAnt : ci.corteSig))}`;
+      }
+      f.querySelector('[data-ciclo]').innerHTML = txt;
+      if (ok) ok.textContent = futuro ? T.programarAbono : T.pagar;
+    };
+    f.querySelector('[data-corte]').addEventListener('click', ev => { const bt = ev.target.closest('[data-m]'); if (bt) { f.monto.value = aInput(Number(bt.dataset.m)); actualizar(false); } });
+    f.fecha.addEventListener('input', ciclo); f.querySelectorAll('[name=bal]').forEach(r => r.addEventListener('change', ciclo));
+    if (abonoId) {
+      const ab = (cuenta(c0.id).abonosProg || []).find(a => a.id === abonoId);
+      if (ab) { f.monto.value = aInput(ab.monto); actualizar(false); }
+      f.querySelector('[data-quitar-abono]').onclick = () => {
+        const x = cuenta(c0.id); x.abonosProg = (x.abonosProg || []).filter(a => a.id !== abonoId); if (!x.abonosProg.length) delete x.abonosProg; x.editado = ahora();
+        hoja().close(); guardar(T.abonoQuitado);
+      };
+    }
+    ciclo();
   }
 
   // ---------- préstamos reales: los que debo (deuda) y los que hice (porCobrar) ----------
@@ -2126,6 +2264,7 @@
   function accionPendiente(txt) {
     const [tipo, id, fecha, ronda] = txt.split('|');
     if (tipo === 'tarjeta') return hojaPagarTarjeta(cuenta(id));
+    if (tipo === 'abono') return hojaPagarTarjeta(cuenta(id), ronda);
     if (tipo === 'cuota' || tipo === 'cobro') return hojaCuota(cuenta(id));
     return X.pendiente(tipo, id, fecha, Number(ronda) || 0);
   }
@@ -2157,6 +2296,19 @@
   document.addEventListener('pointerup', soltar); document.addEventListener('pointercancel', soltar); window.addEventListener('scroll', soltar, { passive: true });
   document.addEventListener('pointermove', ev => { if (presion && Math.hypot(ev.clientX - presion.x, ev.clientY - presion.y) > 10) soltar(); });
   document.addEventListener('contextmenu', ev => { const el = ev.target.closest('.fila[data-mov]'); if (!el) return; ev.preventDefault(); if (Date.now() - sinClick > 800) { soltar(); abrirMenuMov(el); } });
+  // v25: el hero toma la altura de la página que se ve (si no, «Tu dinero» queda con un hueco del alto de «Este mes»).
+  function altoHero(i) {
+    const c = document.querySelector('[data-hero-pags]'); if (!c) return;
+    if (i == null) i = Math.round(c.scrollLeft / Math.max(1, c.clientWidth));
+    const pag = c.children[i]; if (pag) c.style.height = pag.scrollHeight + 'px';
+  }
+  window.addEventListener('resize', () => altoHero());
+  document.addEventListener('scroll', ev => { // v25: el punto activo del hero sigue al deslizar
+    const c = ev.target; if (!c.matches || !c.matches('[data-hero-pags]')) return;
+    const i = Math.round(c.scrollLeft / Math.max(1, c.clientWidth));
+    altoHero(i);
+    c.parentElement.querySelectorAll('[data-accion="hero-pag"]').forEach(b => b.setAttribute('aria-selected', String(Number(b.dataset.i) === i)));
+  }, true);
   document.addEventListener('click', ev => {
     programarCierre(); revisarAviso();
     if (bloqueada) return;
@@ -2227,6 +2379,8 @@
     else if (a === 'gastos-ver') { filtroMovs = { ...filtroMovs, cuentaId: '', per: 'mes', off: 0, tipo: 'gasto', cat: el.dataset.cat, texto: '', limite: 150 }; tab = 'cartera'; pintar(); window.scrollTo(0, 0); }
     else if (a === 'ir-plan') ir('planes', 'plan');
     else if (a === 'ver-movs' || a === 'ver-pend') abrirMovs('');
+    else if (a === 'ir-pend') hojaPorPagar();
+    else if (a === 'hero-pag') { const c = $('[data-hero-pags]'); if (c) c.scrollTo({ left: c.clientWidth * Number(el.dataset.i), behavior: 'smooth' }); }
     else if (a === 'escanear') { hojaMov(null, 'gasto'); const b = document.querySelector('#hoja [data-foto-origen="camara"]'); if (b) b.click(); }
     else if (a === 'salud-periodo') { periodoSalud = Number(el.dataset.p); pintar(); }
     else if (a === 'per-off') moverPer(Number(el.dataset.o));

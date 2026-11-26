@@ -651,7 +651,7 @@ h1, h2, .sub, .hero-monto, .resumen-plan b, .celebra-caja b { font-family: var(-
 [data-tema="tech"] .hero-monto { font-size: 2.05rem; letter-spacing: -.04em; }
 [data-tema="tech"] .hero-monto::after { content: '_'; color: #00E5FF; animation: cursor 1s steps(1) infinite; }
 @keyframes cursor { 50% { opacity: 0; } }
-[data-tema="tech"] :is(.hero, .tarjeta, .lista, .rapida, .pildora, .barra, .barra button, .chip-cat, .pestanas button, .mini, .r-ico, .icono-btn, .redondo, dialog, .hero-mes > div, .chips-hero span) { border-radius: var(--radio); }
+[data-tema="tech"] :is(.hero, .tarjeta, .lista, .rapida, .pildora, .barra, .barra button, .chip-cat, .pestanas button, .mini, .r-ico, .icono-btn, .redondo, dialog, .hero-mes > div, .debe-fila, .chips-hero span) { border-radius: var(--radio); }
 [data-tema="tech"] .barra .fab { border-radius: 8px; transform: rotate(45deg); }
 [data-tema="tech"] .barra .fab .ico-svg { transform: rotate(-45deg); }
 [data-tema="tech"] .rapida { position: relative; background: var(--sup); }
@@ -1033,3 +1033,44 @@ html, body { overflow-x: clip; }
 @media (min-width: 1600px) { :root:not([data-vista="movil"]) body { max-width: 1680px; } :root:not([data-vista="movil"]) nav { left: max(16px, calc(50vw - 840px + 16px)); } :root:not([data-vista="movil"]) #vista { columns: 3 420px; } }
 .arma-botones { display: flex; flex-wrap: wrap; gap: 8px; } .arma-botones .pildora { min-height: 42px; padding: 0 14px; font-size: .9rem; flex: 1 1 auto; }
 .plan-monto small { display: block; text-align: right; }
+/* v25: lo que debes, aparte de «Tu dinero» */
+.hero-debe { display: grid; gap: 6px; margin-top: 12px; }
+.debe-fila { display: flex; justify-content: space-between; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 8px 12px;
+  background: var(--hero-caja); border: 0; border-radius: 14px; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.debe-fila span { font-size: .9rem; opacity: .9; } .debe-fila small { opacity: .7; }
+.debe-fila b { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sub-h { display: flex; justify-content: space-between; align-items: baseline; margin: 16px 0 6px; font-size: 1rem; }
+.sub-h small { opacity: .6; font-weight: 400; }
+.pend.hecho { opacity: .75; } .ok-pago { color: var(--verde, #34c759); font-weight: 700; padding: 0 6px; }
+.plan-inicio { grid-column: 1 / -1; width: 100%; margin-top: 12px; }
+.plan-inicio h3 { font-size: .95rem; margin: 0 0 4px; }
+.plan-inicio li { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+.plan-inicio .txt { flex: 1; min-width: 0; } .plan-inicio .txt b { display: block; font-size: .9rem; }
+.barra-pi { display: block; height: 6px; border-radius: 3px; background: var(--hero-caja, rgba(127,127,127,.2)); overflow: hidden; margin-top: 4px; }
+.barra-pi i { display: block; height: 100%; background: var(--verde, #34c759); }
+.barra-pi.amarillo i { background: var(--amarillo, #ff9f0a); } .barra-pi.rojo i { background: var(--neg, #ff3b30); }
+.pi-monto { white-space: nowrap; font-variant-numeric: tabular-nums; opacity: .8; }
+.pres:has(.plan-inicio) { flex-wrap: wrap; } .plan-inicio { flex: 1 1 100%; }
+.fila-mas { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 0; background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.fila-mas .txt { flex: 1; min-width: 0; } .fila-mas .txt b { display: block; } .fila-mas .txt small { opacity: .75; }
+.corte-info small { display: block; margin-bottom: 4px; } .corte-info .arma-botones { margin-top: 6px; }
+/* v25: hero en dos páginas deslizables: «Tu dinero» y «Este mes» */
+.hero-pags { display: flex; align-items: flex-start; transition: height .25s ease; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; margin: 0 -2px; }
+.hero-pags::-webkit-scrollbar { display: none; }
+.hero-pag { flex: 0 0 100%; min-width: 0; scroll-snap-align: start; padding: 0 2px; }
+.hero-puntos { display: flex; justify-content: center; gap: 8px; margin-top: 10px; }
+.hero-puntos button { position: relative; width: 32px; height: 28px; padding: 0; border: 0; background: none; color: inherit; cursor: pointer; }
+.hero-puntos button::before { content: ''; position: absolute; left: 50%; top: 50%; width: 8px; height: 8px; transform: translate(-50%, -50%); border-radius: 4px; background: currentColor; opacity: .35; transition: width .2s, opacity .2s; }
+.hero-puntos button[aria-selected="true"]::before { width: 22px; opacity: .9; }
+.em-monto { display: block; font-size: 2.1rem; font-weight: 800; letter-spacing: -.03em; margin: 2px 0 2px; font-variant-numeric: tabular-nums; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.em-queda.neg { color: var(--neg, #ff3b30); font-size: 1.6rem; }
+.em-nota { display: block; opacity: .75; margin: 2px 0 8px; }
+.em-cuentas { display: grid; gap: 4px; }
+.em-fila { display: flex; justify-content: space-between; gap: 10px; font-size: .92rem; }
+.em-fila b { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.em-fila.pos b { color: var(--verde, #34c759); } .em-fila.neg b { color: var(--neg, #ff3b30); } .em-fila.suave { opacity: .7; }
+.em-lista { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; }
+.em-item { display: flex; justify-content: space-between; gap: 10px; width: 100%; min-height: 40px; padding: 6px 10px; background: var(--hero-caja); border: 0; border-radius: 12px; color: inherit; font: inherit; font-size: .88rem; text-align: left; cursor: pointer; }
+.em-item small { opacity: .7; } .em-item.tarde small { color: var(--neg, #ff3b30); opacity: 1; }
+.em-item b { font-variant-numeric: tabular-nums; white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) { .hero-puntos button::before, .hero-pags { transition: none; } }

@@ -60,6 +60,11 @@
       const fecha = L.proximaFecha({ frec: 'mensual', dia: c.diaPago }, h);
       if (L.diasEntre(h, fecha) <= 7) out.push({ tipo: 'tarjeta', id: c.id, fecha, dias: L.diasEntre(h, fecha), monto: deuda, nombre: c.parDe ? `${c.nombre} (${L.MONEDAS[c.moneda]})` : c.nombre, icono: '💳' });
     }
+    // v25: abonos programados a la tarjeta («el 4 dic le paso 13,000»).
+    for (const c of d.cuentas.filter(c => !c.borrado && c.tipo === 'credito' && c.abonosProg)) {
+      for (const ab of c.abonosProg) if (L.diasEntre(h, ab.fecha) <= (adelante == null ? 7 : adelante))
+        out.push({ tipo: 'abono', id: c.id, ronda: ab.id, fecha: ab.fecha, dias: L.diasEntre(h, ab.fecha), monto: ab.monto, nombre: c.nombre, icono: '📅' });
+    }
     // Cuotas de préstamos (los que debo y los que me deben).
     for (const c of d.cuentas.filter(c => !c.borrado && !c.castigado && (c.tipo === 'deuda' || c.tipo === 'porCobrar') && c.plan)) {
       const s = siguienteCuota(d, c);
@@ -265,7 +270,27 @@
     return out.sort((x, y) => x.at - y.at).slice(0, 60);
   }
 
-  const api = { ISR_DO, TSS_DO, isrAnualDO, nominaNeto, pendientes, tablaDe, siguienteCuota, comprasSinPagar, diferenciaCambiaria, comprasConTasaDia, difTasaDia,
+  // v25: ciclo de la tarjeta en una fecha: el último corte (<= fecha), el siguiente y el día límite para pagar lo cortado.
+  function cicloTC(c, fecha) {
+    if (!c || !c.diaCorte) return null;
+    const rec = dia => ({ frec: 'mensual', dia });
+    let sig = L.proximaFecha(rec(c.diaCorte), fecha), ant;
+    if (sig === fecha) { ant = fecha; sig = L.proximaFecha(rec(c.diaCorte), L.sumarDias(fecha, 1)); }
+    else ant = L.proximaFecha(rec(c.diaCorte), L.sumarDias(sig, -40));
+    const limite = c.diaPago ? L.proximaFecha(rec(c.diaPago), L.sumarDias(ant, 1)) : null;
+    return { corteAnt: ant, corteSig: sig, limite };
+  }
+  // Lo que cortó la tarjeta, lo abonado después del corte y lo que falta para no pagar intereses.
+  function alCorte(d, c, fechaHoy) {
+    const ci = cicloTC(c, fechaHoy || L.hoy()); if (!ci) return null;
+    const hasta = f => -L.saldoCuenta({ ...d, movimientos: d.movimientos.filter(m => m.fecha <= f) }, c.id);
+    const cortado = Math.max(0, hasta(ci.corteAnt));
+    const abonado = d.movimientos.filter(m => !m.borrado && m.tipo === 'transferencia' && m.cuentaDestinoId === c.id && m.fecha > ci.corteAnt)
+      .reduce((s, m) => s + (m.montoDestino || m.monto), 0);
+    return { ...ci, cortado, abonado, falta: Math.max(0, cortado - abonado) };
+  }
+
+  const api = { ISR_DO, TSS_DO, isrAnualDO, nominaNeto, pendientes, cicloTC, alCorte, tablaDe, siguienteCuota, comprasSinPagar, diferenciaCambiaria, comprasConTasaDia, difTasaDia,
     meta, reto52, samFechas, pozo, samSortear, samSortearRonda, samEstado, encargo, avisos };
   g.Planes = api;
   if (typeof module !== 'undefined') module.exports = api;

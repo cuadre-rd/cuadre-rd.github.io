@@ -223,6 +223,11 @@
     if (DISENOS_CC.includes(c.diseno)) out.diseno = c.diseno;
     if (REDES_CC.includes(c.red)) out.red = c.red;
     if (Number(c.tasa) > 0 && Number(c.tasa) <= 300) out.tasa = Number(c.tasa); // v24: tasa anual de la tarjeta (%)
+    if (Array.isArray(c.abonosProg)) { // v25: abonos programados a la tarjeta (todavía no salen de ninguna cuenta)
+      const ab = c.abonosProg.filter(x => x && esId(x.id) && /^\d{4}-\d{2}-\d{2}$/.test(x.fecha || '') && ent(x.monto, 1) !== null).slice(0, 24).map(x => ({ id: x.id, fecha: x.fecha, monto: x.monto }));
+      if (ab.length) out.abonosProg = ab;
+    }
+    if (c.fueraTotal) out.fueraTotal = true; // v25: no sumar esta cuenta en «Tu dinero» de Inicio
     if (c.banco) out.banco = txt(c.banco, 30);
     if (c.persona) out.persona = txt(c.persona, 40);
     if (esId(c.parDe)) out.parDe = c.parDe;
@@ -382,6 +387,20 @@
     return { total, porMoneda, porTipo, gastos: f.gastos, ingresos: f.ingresos, faltaTasa: faltaTasa || f.faltaTasa, mes };
   }
 
+  // v25: «Tu dinero» de Inicio: solo lo que tienes (efectivo, ahorro, inversión), sin deudas ni tarjetas y sin las cuentas que el usuario apartó.
+  const TIPOS_DINERO = ['diaria', 'ahorro', 'inversion'];
+  function dinero(d) {
+    let total = 0, faltaTasa = false;
+    const porMoneda = {};
+    for (const c of d.cuentas.filter(x => !x.borrado && !x.fueraTotal && TIPOS_DINERO.includes(x.tipo))) {
+      const s = saldoCuenta(d, c.id);
+      porMoneda[c.moneda] = (porMoneda[c.moneda] || 0) + s;
+      const p = aPrincipal(d, s, c.moneda);
+      if (p === null) faltaTasa = true; else total += p;
+    }
+    return { total, porMoneda, faltaTasa };
+  }
+
   // Gastos del mes por categoría principal, de mayor a menor.
   function porCategoria(d, mes) {
     return Object.entries(flujoMes(d, mes).porCat).map(([id, total]) => ({ id, total })).sort((a, b) => b.total - a.total);
@@ -518,7 +537,7 @@
 
   const api = { VERSION, MISIONES_VERSION, MONEDAS, PAISES, CATEGORIAS, NEUTRAS, TIPOS_CUENTA, CON_QUIEN, COLECCIONES, parseMonto, parseNum, formato,
     DISENOS_CC, REDES_CC, hoy, diasDelMes, mesAnterior, sumarDias, diasEntre, sumarMeses, fechasEntre, proximaFecha, vecesAlMes, uuid, vacio,
-    migrar, normalizar, orden, saldoCuenta, saldosCorridos, flujoRango, aPrincipal, convertir, cambiarPrincipal, padreDe, flujoMes, resumen, porCategoria,
+    migrar, normalizar, orden, saldoCuenta, saldosCorridos, flujoRango, aPrincipal, convertir, cambiarPrincipal, padreDe, flujoMes, resumen, dinero, TIPOS_DINERO, porCategoria,
     historial, ritmoMes, promedios, proyeccion, presupuesto, nivel, salud, racha, dividir, unir, misiones, necesitaRespaldo, leerRespaldo };
   g.Logica = api;
   if (typeof module !== 'undefined') module.exports = api;
