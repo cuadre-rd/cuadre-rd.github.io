@@ -2,9 +2,11 @@
 // Las secciones Planes y Calculadora están en secciones.js (reciben el contexto W).
 (function () {
   'use strict';
-  const APP_VERSION = '22';
+  const APP_VERSION = '23';
   const L = window.Logica, T = window.T, G = window.Graficas, B = window.Boveda, PL = window.Planes, PR = window.Prestamos, S = window.Sistema;
   const $ = s => document.querySelector(s);
+  // v23: en Chrome de Android la página se achica con el teclado (así Guardar queda visible). Safari no conoce la clave y la marca como error.
+  if (/Android/i.test(navigator.userAgent)) { const vp = $('meta[name="viewport"]'); if (vp && !/interactive-widget/.test(vp.content)) vp.content += ', interactive-widget=resizes-content'; }
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   const ICON = {
     inicio: '<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
@@ -230,6 +232,33 @@
       <div class="acciones uno"><button type="button" class="pildora" data-cerrar>${T.cerrar}</button></div>`, () => {}, { sinAcciones: true });
     f.querySelectorAll('[data-elegir-cat]').forEach(b => b.onclick = () => { m.categoriaId = b.dataset.elegirCat; m.editado = ahora(); hoja().close(); guardar(T.categoriaCambiada); });
   }
+  // v23: borrar un movimiento (y lo que salió de él al dividir o redondear). Lo usan Anotar y el menú de dedo presionado.
+  function borrarMov(m) {
+    const t = ahora(); m.borrado = true; m.editado = t;
+    D.movimientos.filter(x => !x.borrado && x.ref && x.ref.id === m.id && (x.ref.tipo === 'dividir' || x.ref.tipo === 'redondeo')).forEach(x => { x.borrado = true; x.editado = t; });
+  }
+  // v23: menú al dejar el dedo presionado sobre un movimiento.
+  function hojaMenuMov(m) {
+    if (!m) return;
+    const dup = ['gasto', 'ingreso', 'transferencia'].includes(m.tipo) && !m.ref, cat = m.tipo === 'gasto' || m.tipo === 'ingreso';
+    const f = abrirHoja(`<h2>${esc(m.nota || m.lugar || catNombre(m.categoriaId) || T[m.tipo] || '')}</h2><p class="nota">${din(m.monto, (cuenta(m.cuentaId) || {}).moneda)} · ${fechaCorta(m.fecha)}</p>
+      <div class="menu-mov"><button type="button" class="pildora ancho" data-m="editar">✏️ ${T.editar}</button>
+      ${dup ? `<button type="button" class="pildora ancho" data-m="duplicar">📄 ${T.duplicarHoy}</button>` : ''}
+      ${cat ? `<button type="button" class="pildora ancho" data-m="cat">🏷️ ${T.cambiarCat}</button>` : ''}
+      <button type="button" class="pildora peligro ancho" data-m="borrar">🗑️ ${T.borrar}</button></div>
+      <div class="acciones uno"><button type="button" class="pildora" data-cerrar>${T.cerrar}</button></div>`, () => {}, { sinAcciones: true });
+    f.querySelector('.menu-mov').onclick = ev => {
+      const a = (ev.target.closest('[data-m]') || {}).dataset; if (!a) return;
+      if (a.m === 'editar') return hojaMov(m);
+      if (a.m === 'cat') return hojaCambiarCat(m);
+      if (a.m === 'borrar') { if (!confirm(T.confirmarBorrarMov)) return; borrarMov(m); hoja().close(); return void guardar(T.borrado); }
+      if (a.m === 'duplicar') {
+        if (soloLectura()) return hojaPlanes();
+        const { id, creado, editado, foto, fecha, ...resto } = m; // la copia es de hoy y sin la foto
+        nuevoMov({ ...JSON.parse(JSON.stringify(resto)), fecha: L.hoy() }); hoja().close(); guardar(T.duplicado);
+      }
+    };
+  }
   // Te quedan X hasta tu próximo cobro: lo de las cuentas de uso menos lo que hay que pagar antes, entre los días que faltan.
   function tarjetaCobro() {
     const hoy = L.hoy();
@@ -368,7 +397,8 @@
       <h3>${T.adminCuentasT}</h3><ul class="lista-plana" data-cuentas><li>${T.cargando}</li></ul>
       <div class="acciones uno"><button type="button" class="pildora" data-cerrar>${T.cerrar}</button></div>`, () => {}, { sinAcciones: true });
     const lista = f.querySelector('[data-cuentas]'), msg = f.querySelector('[data-admin-msg]');
-    const fecha = v => (v ? fechaCorta(String(v).slice(0, 10)) : '—');
+    // Con año y en hora local: 12 o 24 meses de regalo deben verse distintos.
+    const fecha = v => (v && !isNaN(Date.parse(v)) ? new Date(v).toLocaleDateString('es-DO', { day: 'numeric', month: 'long', year: 'numeric' }) : '—');
     const pintarLista = () => Portada.adminCuentas().then(l => {
       lista.innerHTML = l.length ? l.map(c => `<li class="pend"><span class="txt"><b>${esc(c.nombre || c.correo)}</b><small>${esc(c.correo)} · ${esc(T.mPlan[c.plan] || c.plan || '—')} · ${T.adminVence} ${fecha(c.vence)}</small></span></li>`).join('') : `<li>${T.adminSinCuentas}</li>`;
     }, e => { lista.innerHTML = `<li>${esc(e.message)}</li>`; });
@@ -492,7 +522,8 @@
       titulo = catNombre(m.categoriaId) || m.nota || m.lugar; icono = cat(m.categoriaId).icono; color = cat(m.categoriaId).color;
       monto = m.tipo === 'gasto' ? -m.monto : m.monto; clase = m.tipo === 'gasto' ? '' : 'pos';
     }
-    const extra = [m.tipo === 'transferencia' ? T.transferencia : esc(c.nombre), fechaCorta(m.fecha)];
+    const origen = c.tipo === 'credito' ? `💳 ${esc(c.nombre)}${c.ultimos4 ? ' ••' + esc(c.ultimos4) : ''}` : esc(c.nombre); // v23: de dónde salió, de un vistazo
+    const extra = [m.tipo === 'transferencia' ? T.transferencia : origen, fechaCorta(m.fecha)];
     if (m.tipo === 'gasto' || m.tipo === 'ingreso') { const det = [m.nota, m.lugar].filter(x => x && x !== titulo).map(esc).join(' · '); if (det) extra.unshift(det); }
     if (m.conQuien) extra.push(T.quien[m.conQuien]);
     if (m.monedaOriginal) extra.push(L.formato(m.montoOriginal, m.monedaOriginal));
@@ -570,6 +601,7 @@
           .map(([a, i, t, c]) => `<button class="rapida ${c}" data-accion="${a}"><span class="r-ico">${ico(i, 'vivo')}</span><small>${t}</small></button>`).join('')}
       </div>
       ${vPendientes()}
+      ${panelTarjetas()}
       <section class="tarjeta pres ${pr.limite ? L.nivel(pr.pct) : ''}">
         ${pr.limite ? `${G.anillo(pr.pct, { tam: 96, grosor: 11, clase: L.nivel(pr.pct), centro: `<b>${Math.round(pr.pct * 100)}%</b>` })}
           <div class="pres-txt"><h2>${T.presupuesto}</h2>
@@ -709,19 +741,40 @@
   }
 
   // ---------- cuentas ----------
-  const COLORES_CC = [['#FFB199', '#FF7A85'], ['#B9A8FF', '#7B61FF'], ['#8FE3CF', '#2EB8A0'], ['#FFC2E2', '#E86AA6'], ['#9FD3FF', '#5B8CFF']];
   // Tarjeta de doble moneda: la cuenta en la otra moneda lleva parDe = id de la principal.
   const pareja = c => D.cuentas.find(x => x.parDe === c.id && !x.borrado);
+  const RED_TXT = { visa: 'VISA', mastercard: 'mastercard', amex: 'AMEX', discover: 'DISCOVER' };
+  // Etiqueta de pago: días hasta el día límite si se debe algo.
+  function pagoCC(c, deuda) {
+    if (deuda <= 0) return c.diaPago || c.diaCorte ? `<span class="cc-pago verde">${T.alDia}</span>` : '';
+    if (!c.diaPago) return '';
+    const n = L.diasEntre(L.hoy(), L.proximaFecha({ frec: 'mensual', dia: c.diaPago }, L.hoy()));
+    return `<span class="cc-pago ${n <= 3 ? 'rojo' : n <= 10 ? 'amb' : ''}">${T.pagaEn(n)}</span>`;
+  }
+  // v23: panel de tarjetas en Inicio: lo que debes, cuándo corta y cuántos días quedan para pagar.
+  function panelTarjetas() {
+    const tcs = cuentasVivas().filter(c => c.tipo === 'credito' && !c.parDe && !c.castigado && !c.privada);
+    if (!tcs.length) return '';
+    const corta = c => c.diaCorte ? L.diasEntre(L.hoy(), L.proximaFecha({ frec: 'mensual', dia: c.diaCorte }, L.hoy())) : null;
+    return `<section class="tarjeta panel-tc"><h2>💳 ${T.tusTarjetas}</h2><ul class="lista-plana">${tcs.map(c => {
+      const deuda = -L.saldoCuenta(D, c.id), n = corta(c), uso = c.limite ? Math.round(Math.min(1, Math.max(0, deuda) / c.limite) * 100) : null;
+      return `<li><button class="fila-tc" data-cuenta="${esc(c.id)}"><span class="cc-mini" data-dis="${c.diseno || 'lavanda'}"></span>
+        <span class="txt"><b>${esc(c.banco || c.nombre)}${c.ultimos4 ? ` ••${esc(c.ultimos4)}` : ''}</b><small>${[deuda > 0 ? `${T.debes} ${din(deuda, c.moneda)}` : T.aFavor + ' ' + din(-deuda, c.moneda), uso != null ? `${uso}% ${T.usado}` : '', n != null ? T.cortaEn(n) : ''].filter(Boolean).join(' · ')}</small></span>
+        ${pagoCC(c, deuda)}</button></li>`;
+    }).join('')}</ul></section>`;
+  }
   function tarjetaCC(c, i) {
-    const deuda = -L.saldoCuenta(D, c.id), [g1, g2] = COLORES_CC[i % COLORES_CC.length], par = pareja(c);
+    const deuda = -L.saldoCuenta(D, c.id), par = pareja(c);
+    const dis = c.diseno || L.DISENOS_CC[i % L.DISENOS_CC.length];
     const uso = c.limite ? Math.min(1, Math.max(0, deuda) / c.limite) : 0;
     const d2 = par ? -L.saldoCuenta(D, par.id) : 0;
-    return `<button class="cc" data-cuenta="${esc(c.id)}" style="--g1:${g1};--g2:${g2}">
-      <span class="cc-top"><b>${esc(c.banco || c.nombre)}</b>${c.privada ? ico('candado') : '<i class="cc-chip"></i>'}</span>
+    return `<button class="cc" data-dis="${dis}" data-cuenta="${esc(c.id)}">
+      <span class="cc-top"><b>${esc(c.banco || c.nombre)}</b>${RED_TXT[c.red] ? `<span class="cc-red ${c.red}">${RED_TXT[c.red]}</span>` : c.privada ? ico('candado') : ''}</span>
+      ${c.privada && RED_TXT[c.red] ? ico('candado') : '<i class="cc-chip"></i>'}
       <span class="cc-saldos"><span class="cc-saldo"><small>${deuda > 0 ? T.debes : T.aFavor}</small><b>${din(Math.abs(deuda), c.moneda)}</b></span>
       ${par ? `<span class="cc-saldo dos-mon"><small>${d2 > 0 ? T.debes : T.aFavor}</small><b>${din(Math.abs(d2), par.moneda)}</b></span>` : ''}</span>
       ${c.limite && !par ? `<span class="cc-uso"><i style="width:${Math.round(uso * 100)}%"></i></span><small class="cc-disp">${T.disponible} ${din(c.limite - Math.max(0, deuda), c.moneda)}</small>` : ''}
-      <span class="cc-pie"><span>•••• ${esc(c.ultimos4 || '····')}</span><span>${esc(c.vence || '')}</span></span></button>`;
+      <span class="cc-pie"><span>•••• ${esc(c.ultimos4 || '····')}${c.vence ? ' · ' + esc(c.vence) : ''}</span>${pagoCC(c, deuda)}</span></button>`;
   }
   function filaCuenta(c) {
     const s = L.saldoCuenta(D, c.id);
@@ -803,7 +856,7 @@
   function movsFiltrados() {
     const f = filtroMovs, [desde, hasta] = rangoFechas(f), ids = idsVista(), txt = f.texto.trim().toLowerCase();
     return D.movimientos.filter(m => {
-      if (m.borrado || m.fecha < desde || m.fecha > hasta) return false;
+      if (m.borrado || (!txt && (m.fecha < desde || m.fecha > hasta))) return false; // v23: al buscar, se busca en todo el historial
       if (ids ? !(ids.has(m.cuentaId) || ids.has(m.cuentaDestinoId)) : m.tipo === 'saldo') return false;
       if (f.tipo !== 'todos' && m.tipo !== f.tipo) return false;
       if (f.cat && L.padreDe(D, m.categoriaId) !== f.cat) return false;
@@ -902,7 +955,7 @@
           <button class="pildora" data-accion="cab-editar">${T.editarCuenta}</button><button class="pildora" data-accion="cab-saldo">${T.fijarSaldo}</button>`
         : `<button class="pildora" data-accion="mover">↔️ ${T.transferencia}</button>`}<button class="pildora" data-tab-ir="cuentas" aria-label="${T.misCuentas}">🏦 ${T.misCuentas}</button></div>
       </section>
-      ${f.buscar || f.texto ? `<label class="campo buscar"><input type="search" data-filtro="texto" value="${esc(f.texto)}" placeholder="🔎 ${T.buscarMovs}" aria-label="${T.buscarMovs}"></label>` : ''}
+      ${f.buscar || f.texto ? `<label class="campo buscar"><input type="search" data-filtro="texto" value="${esc(f.texto)}" placeholder="🔎 ${T.buscarMovs}" aria-label="${T.buscarMovs}"></label>${f.texto.trim() ? `<p class="nota">${T.buscandoTodo}</p>` : ''}` : ''}
       <div class="periodo-fila"><label class="pildora selector-per">📅 <select id="per-sel" aria-label="${T.periodo}">${pers.map(p => `<option value="${p}" ${f.per === p ? 'selected' : ''}>${T.periodos2[p]}</option>`).join('')}</select><span aria-hidden="true">▾</span></label>
         <details class="mas-filtros" ${filtrando ? 'open' : ''}><summary>${T.filtros}${filtrando ? ' •' : ''}</summary>
           <div class="segmento chico">${['todos', 'gasto', 'ingreso', 'transferencia'].map(t => `<label><input type="radio" name="filtro-tipo" data-filtro="tipo" value="${t}" ${f.tipo === t ? 'checked' : ''}><span>${T.tiposFiltro[t]}</span></label>`).join('')}</div>
@@ -996,8 +1049,9 @@
       ${window.Portada ? `<h2 class="sub">👤 ${T.miCuenta}</h2><section class="tarjeta"><p class="nota">${estadoMembresia(membresia())}</p>
         <button class="pildora ancho" data-accion="planes">✨ ${T.mVerPlanes}</button>${Portada.hayCuentas() ? `<button class="pildora ancho" data-accion="sugerencia">💡 ${T.sugT}</button>` : ''}${membresia().admin ? `<button class="pildora oscura ancho" data-accion="admin">🛠 ${T.adminT}</button>` : ''}${Portada.sesion() ? `<p class="grande">${esc(Portada.sesion().nombre || '')}</p><small>${esc(Portada.sesion().correo || '')}</small>
         <button class="pildora ancho" data-accion="cuenta-salir">${T.cerrarSesion}</button>
-        <button class="pildora peligro ancho" data-accion="cuenta-borrar">${T.borrarCuenta}</button>` : `<button class="pildora oscura ancho" data-accion="cuenta-entrar">${T.entrarOCrear}</button>`}
-        <p class="nota"><a href="legal/privacidad.html">${T.pPrivacidad}</a> · <a href="legal/terminos.html">${T.pTerminos}</a></p></section>` : ''}
+        <button class="pildora peligro ancho" data-accion="cuenta-borrar">${T.borrarCuenta}</button>` : `<button class="pildora oscura ancho" data-accion="cuenta-entrar">${T.entrarOCrear}</button>`}</section>` : ''}
+      <h2 class="sub">🛡️ ${T.tuPrivT}</h2><section class="tarjeta"><ul class="tu-priv">${T.tuPriv.map(x => `<li>${x}</li>`).join('')}</ul>
+        <p class="nota"><a href="legal/privacidad.html">${T.pPrivacidad}</a> · <a href="legal/terminos.html">${T.pTerminos}</a> · <a href="mailto:cuadre.app.rd@gmail.com">${T.pContacto}</a></p></section>
       <h2 class="sub">${ico('candado')} ${T.seguridad}</h2><section class="tarjeta">
         <label class="interruptor"><span>${T.bloquearApp}</span><input type="checkbox" id="bloqueo" ${D.ajustes.bloqueoApp ? 'checked' : ''}><i></i></label>
         <p class="nota">${T.bloquearTxt}</p>
@@ -1015,6 +1069,9 @@
         <label class="interruptor"><span>${T.avisosPagos}</span><input type="checkbox" id="avisos" ${D.ajustes.avisos !== false ? 'checked' : ''}><i></i></label>
         <label class="campo fila-campo"><span>${T.horaAviso}</span><select id="hora">${[6, 7, 8, 9, 10, 12, 15, 18, 20].map(h => `<option value="${h}" ${(D.ajustes.horaAviso == null ? 9 : D.ajustes.horaAviso) === h ? 'selected' : ''}>${String(h).padStart(2, '0')}:00</option>`).join('')}</select></label>
         <p class="nota">${S.esApk() ? T.avisosTxt : T.avisosWeb}</p>
+        <h3 class="mini-t">${T.avisosAnimoT}</h3>
+        ${['sinGastos', 'ahorro', 'corte'].map(k => `<label class="interruptor"><span>${T.avisosAnimo[k]}</span><input type="checkbox" data-animo="${k}" ${(D.ajustes.avisosAnimo || {})[k] !== false ? 'checked' : ''}><i></i></label>`).join('')}
+        <label class="interruptor"><span>${T.avisoPresT}</span><input type="checkbox" id="aviso-pres" ${D.ajustes.avisoPres !== false ? 'checked' : ''}><i></i></label>
       </section>
       <h2 class="sub">${T.datos}</h2><section class="tarjeta">
         <button class="pildora oscura ancho" data-accion="respaldar">${T.respaldar}</button>
@@ -1209,7 +1266,7 @@
         }
         // Aviso al momento si el presupuesto de esa categoría pasa del 80 % o del 100 %.
         const despues = padreCat ? usoCat(padreCat) : null;
-        if (despues !== null && antes !== null) {
+        if (despues !== null && antes !== null && D.ajustes.avisoPres !== false) { // v23: se puede apagar en Ajustes → Avisos
           if (antes <= 1 && despues > 1) msg = T.alertaPasaste(catNombre(padreCat));
           else if (antes < 0.8 && despues >= 0.8) msg = T.alerta80(catNombre(padreCat), Math.round(despues * 100));
         }
@@ -1315,9 +1372,7 @@
     const b = f.querySelector('[data-borrar-mov]');
     if (b) b.onclick = () => {
       if (!confirm(T.confirmarBorrarMov)) return;
-      const t = ahora(); m.borrado = true; m.editado = t;
-      D.movimientos.filter(x => !x.borrado && x.ref && x.ref.id === m.id && (x.ref.tipo === 'dividir' || x.ref.tipo === 'redondeo')).forEach(x => { x.borrado = true; x.editado = t; });
-      borrarBorrador(); hoja().close(); guardar(T.borrado);
+      borrarMov(m); borrarBorrador(); hoja().close(); guardar(T.borrado);
     };
     // ---- borrador: lo escrito se guarda solo; si la app se bloquea, te llaman o Android la cierra, se continúa luego ----
     const snap = () => ({
@@ -1386,11 +1441,14 @@
           <label class="campo">${T.vence}<input name="vence" inputmode="numeric" maxlength="5" autocomplete="off" value="${c ? esc(c.vence || '') : ''}" placeholder="MM/AA"></label>
         </div>
         <p class="nota">🔒 ${T.ccSeguro}</p>
+        <fieldset class="chips"><legend>${T.disenoTarjeta}</legend><div class="dis-cc">${L.DISENOS_CC.map((d, i) => `<label class="chip" title="${T.disenosCC[i]}"><input type="radio" name="diseno" value="${d}" ${(c && c.diseno ? c.diseno === d : i === 0) ? 'checked' : ''}><span class="cc-mini" data-dis="${d}" aria-label="${T.disenosCC[i]}"></span></label>`).join('')}</div></fieldset>
+        <label class="campo">${T.redTarjeta}<select name="red"><option value="">—</option>${L.REDES_CC.map((r, i) => `<option value="${r}" ${c && c.red === r ? 'selected' : ''}>${T.redesCC[i]}</option>`).join('')}</select></label>
         <label class="campo">${T.limite}<input name="limite" inputmode="decimal" autocomplete="off" value="${c ? aInput(c.limite) : ''}" placeholder="0.00"></label>
         <div class="dos">
           <label class="campo">${T.diaCorte}<input name="diaCorte" type="number" min="1" max="31" value="${c && c.diaCorte || ''}"></label>
           <label class="campo">${T.diaPago}<input name="diaPago" type="number" min="1" max="31" value="${c && c.diaPago || ''}"></label>
         </div>
+        <p class="nota">${T.diasGracia}</p>
         <label class="interruptor"><span>💱 ${T.dobleMoneda}</span><input type="checkbox" name="doble" ${par ? 'checked' : ''}><i></i></label>
         <div data-doble ${par ? '' : 'hidden'}>
           <div class="dos">
@@ -1427,7 +1485,7 @@
           const lim = String(fd.get('limite') || '').trim() ? L.parseMonto(fd.get('limite')) : undefined;
           if (lim === null) return T.montoInvalido;
           const dia = k => { const n = Number(fd.get(k)); return n >= 1 && n <= 31 ? n : undefined; };
-          Object.assign(extra, { ultimos4: u4 || undefined, vence: v || undefined, limite: lim, diaCorte: dia('diaCorte'), diaPago: dia('diaPago') });
+          Object.assign(extra, { ultimos4: u4 || undefined, vence: v || undefined, limite: lim, diaCorte: dia('diaCorte'), diaPago: dia('diaPago'), diseno: fd.get('diseno') || undefined, red: fd.get('red') || undefined });
         }
         const t = ahora();
         const icono = tp === 'credito' ? '💳' : tp === 'inversion' ? '📈' : tp === 'ahorro' ? '🐷' : '💵';
@@ -1444,7 +1502,7 @@
         } else if (par && L.saldoCuenta(D, par.id) !== 0) return T.dobleConSaldo;
         const comunes = () => JSON.parse(JSON.stringify({ nombre, privada, ...extra, limite: undefined }));
         const sincronizar = (principalId) => {
-          if (dob && par) { for (const k of ['banco', 'impuestoPct', 'ultimos4', 'vence', 'diaCorte', 'diaPago']) delete par[k]; Object.assign(par, comunes(), { limite: dob.limite, editado: t }); }
+          if (dob && par) { for (const k of ['banco', 'impuestoPct', 'ultimos4', 'vence', 'diaCorte', 'diaPago', 'diseno', 'red']) delete par[k]; Object.assign(par, comunes(), { limite: dob.limite, editado: t }); }
           else if (dob) {
             const id2 = L.uuid();
             D.cuentas.push({ id: id2, moneda: dob.moneda, icono: '💳', tipo: 'credito', parDe: principalId, creado: t, editado: t, borrado: false, ...comunes(), limite: dob.limite });
@@ -1452,7 +1510,7 @@
           } else if (par) { par.borrado = true; par.editado = t; }
         };
         if (c) {
-          for (const k of ['banco', 'impuestoPct', 'ultimos4', 'vence', 'limite', 'diaCorte', 'diaPago']) delete c[k];
+          for (const k of ['banco', 'impuestoPct', 'ultimos4', 'vence', 'limite', 'diaCorte', 'diaPago', 'diseno', 'red']) delete c[k];
           Object.assign(c, { nombre, tipo: tp, privada, editado: t, icono: c.tipo === tp ? c.icono : icono }, JSON.parse(JSON.stringify(extra)));
           sincronizar(c.id);
           return void guardar(T.guardado);
@@ -1472,6 +1530,10 @@
       const e = f.querySelector('[data-et-saldo]'); if (e) e.textContent = r.value === 'credito' ? T.debesHoy : T.saldoInicial;
     });
     f.ultimos4.oninput = () => { f.ultimos4.value = f.ultimos4.value.replace(/\D/g, '').slice(0, 4); };
+    // v23: al poner el día de corte, sugiere el día límite (corte + 25 días; Popular y BHD dan 25, Banreservas unos 22).
+    f.diaCorte.oninput = () => { const k = Number(f.diaCorte.value); if (k >= 1 && k <= 31 && !f.diaPago.dataset.tocado) f.diaPago.value = ((k + 25 - 1) % 30) + 1; };
+    f.diaPago.oninput = () => { f.diaPago.dataset.tocado = '1'; };
+    if (c && c.diaPago) f.diaPago.dataset.tocado = '1';
     f.vence.oninput = () => { let v = f.vence.value.replace(/\D/g, '').slice(0, 4); if (v.length > 2) v = v.slice(0, 2) + '/' + v.slice(2); f.vence.value = v; };
     f.doble.onchange = () => { f.querySelector('[data-doble]').hidden = !f.doble.checked; };
     if (!c) return;
@@ -2010,9 +2072,21 @@
   }
 
   // ---------- eventos ----------
+  // v23: dedo presionado ~0.5 s sobre un movimiento → menú (Editar, Duplicar, Cambiar categoría, Borrar).
+  let presion = null, sinClick = 0;
+  const abrirMenuMov = el => { sinClick = Date.now(); presion = null; if (navigator.vibrate) navigator.vibrate(12); hojaMenuMov(D.movimientos.find(m => m.id === el.dataset.mov)); };
+  document.addEventListener('pointerdown', ev => {
+    const el = !bloqueada && ev.target.closest('.fila[data-mov]'); if (!el || ev.target.closest('[data-cambiar-cat]')) return;
+    presion = { x: ev.clientX, y: ev.clientY, t: setTimeout(() => abrirMenuMov(el), 520) };
+  });
+  const soltar = () => { if (presion) { clearTimeout(presion.t); presion = null; } };
+  document.addEventListener('pointerup', soltar); document.addEventListener('pointercancel', soltar); window.addEventListener('scroll', soltar, { passive: true });
+  document.addEventListener('pointermove', ev => { if (presion && Math.hypot(ev.clientX - presion.x, ev.clientY - presion.y) > 10) soltar(); });
+  document.addEventListener('contextmenu', ev => { const el = ev.target.closest('.fila[data-mov]'); if (!el) return; ev.preventDefault(); if (Date.now() - sinClick > 800) { soltar(); abrirMenuMov(el); } });
   document.addEventListener('click', ev => {
     programarCierre(); revisarAviso();
     if (bloqueada) return;
+    if (Date.now() - sinClick < 800 && ev.target.closest('.fila[data-mov]')) return; // el toque largo ya abrió el menú
     const cc = ev.target.closest('[data-cambiar-cat]');
     if (cc) return hojaCambiarCat(D.movimientos.find(m => m.id === cc.dataset.cambiarCat));
     const el = ev.target.closest('[data-tab],[data-tab-ir],[data-accion],[data-mov],[data-cuenta],[data-mision],[data-pend]');
@@ -2114,6 +2188,8 @@
     else if (t.name === 'modo-app') { D.ajustes.modo = t.value; guardar(); }
     else if (t.id === 'avisos') { D.ajustes.avisos = t.checked; guardar(t.checked ? T.avisosOn : T.avisosOff); }
     else if (t.id === 'hora') { D.ajustes.horaAviso = Number(t.value); guardar(T.guardado); }
+    else if (t.dataset && t.dataset.animo) { D.ajustes.avisosAnimo = { ...(D.ajustes.avisosAnimo || {}), [t.dataset.animo]: t.checked }; guardar(T.guardado); }
+    else if (t.id === 'aviso-pres') { D.ajustes.avisoPres = t.checked; guardar(T.guardado); }
     else if (t.id === 'redondeo-cuenta') { D.ajustes.redondeo = t.value ? { cuentaId: t.value, a: (D.ajustes.redondeo || {}).a || 100 } : null; guardar(T.guardado); }
     else if (t.id === 'redondeo-a') { D.ajustes.redondeo.a = Number(t.value); guardar(T.guardado); }
     else if (t.id === 'archivo') restaurar(t.files[0]);

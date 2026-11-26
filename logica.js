@@ -17,6 +17,9 @@
   };
   // credito y deuda llevan saldo negativo (lo que se debe); porCobrar y sam, positivo (lo que te deben o pusiste).
   const TIPOS_CUENTA = ['diaria', 'ahorro', 'inversion', 'credito', 'deuda', 'porCobrar', 'sam'];
+  // Diseños y redes de la tarjeta de crédito (v23). Solo cambian cómo se ve.
+  const DISENOS_CC = ['aurora', 'lavanda', 'atardecer', 'oceano', 'menta', 'black', 'silver', 'gold', 'rosegold', 'titanio', 'holo', 'medianoche'];
+  const REDES_CC = ['visa', 'mastercard', 'amex', 'discover', 'otra'];
   const CON_QUIEN = ['solo', 'pareja', 'amigos', 'familia', 'trabajo'];
 
   // padre: subcategoría. social: pregunta «¿con quién?». lugar: pide tienda o sitio. oculta: no sale en los chips.
@@ -86,7 +89,8 @@
     let s = String(txt == null ? '' : txt).replace(/[\s,]/g, '').replace(/^[A-Z]{0,3}\$/i, '');
     let neg = false;
     if (s.startsWith('-')) { if (!permitirNegativo) return null; neg = true; s = s.slice(1); }
-    const m = /^(\d{1,12})(?:\.(\d{0,2}))?$/.exec(s) || /^()\.(\d{1,2})$/.exec(s);
+    // Tope: RD$999,999,999.99. Un monto más grande casi siempre es un error de dedo (y descuadraba la pantalla).
+    const m = /^(\d{1,9})(?:\.(\d{0,2}))?$/.exec(s) || /^()\.(\d{1,2})$/.exec(s);
     if (!m) return null;
     const c = Number(m[1] || 0) * 100 + Number((m[2] || '').padEnd(2, '0'));
     return neg ? -c : c;
@@ -216,6 +220,8 @@
     if (/^(0[1-9]|1[0-2])\/\d{2}$/.test(c.vence || '')) out.vence = c.vence;
     if (ent(c.limite) !== null) out.limite = c.limite;
     for (const k of ['diaCorte', 'diaPago']) if (ent(c[k], 1) !== null && c[k] <= 31) out[k] = c[k];
+    if (DISENOS_CC.includes(c.diseno)) out.diseno = c.diseno;
+    if (REDES_CC.includes(c.red)) out.red = c.red;
     if (c.banco) out.banco = txt(c.banco, 30);
     if (c.persona) out.persona = txt(c.persona, 40);
     if (esId(c.parDe)) out.parDe = c.parDe;
@@ -509,7 +515,7 @@
   }
 
   const api = { VERSION, MISIONES_VERSION, MONEDAS, PAISES, CATEGORIAS, NEUTRAS, TIPOS_CUENTA, CON_QUIEN, COLECCIONES, parseMonto, parseNum, formato,
-    hoy, diasDelMes, mesAnterior, sumarDias, diasEntre, sumarMeses, fechasEntre, proximaFecha, vecesAlMes, uuid, vacio,
+    DISENOS_CC, REDES_CC, hoy, diasDelMes, mesAnterior, sumarDias, diasEntre, sumarMeses, fechasEntre, proximaFecha, vecesAlMes, uuid, vacio,
     migrar, normalizar, orden, saldoCuenta, saldosCorridos, flujoRango, aPrincipal, convertir, cambiarPrincipal, padreDe, flujoMes, resumen, porCategoria,
     historial, ritmoMes, promedios, proyeccion, presupuesto, nivel, salud, racha, dividir, unir, misiones, necesitaRespaldo, leerRespaldo };
   g.Logica = api;

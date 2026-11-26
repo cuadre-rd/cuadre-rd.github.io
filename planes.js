@@ -224,6 +224,27 @@
         for (const hh of [hora, 18]) { const t = a(fecha, hh); if (t > ahoraMs) out.push({ at: t, titulo: T.avisoNominaTitulo, cuerpo: T.avisoNomina(n.nombre) }); }
       }
     }
+    // v23: avisos que «hablan» al usuario. Como máximo uno de estos por día y sin montos (se ven con la pantalla bloqueada).
+    const op = d.ajustes.avisosAnimo || {}, usados = new Set(), animo = (fecha, hh, titulo, cuerpo) => {
+      const t = a(fecha, hh); if (t > ahoraMs && !usados.has(fecha)) { usados.add(fecha); out.push({ at: t, titulo, cuerpo }); }
+    };
+    if (op.ahorro !== false) {
+      for (const n of vivos(d.nominas)) for (const fecha of L.fechasEntre(n.rec, h, L.sumarDias(h, 31))) animo(fecha, 13, T.animoNominaT, T.animoNomina);
+      const ahorroCta = new Set(vivos(d.cuentas).filter(c => c.tipo === 'ahorro' || c.tipo === 'inversion').map(c => c.id));
+      const mes = h.slice(0, 7), yaAhorro = (d.movimientos || []).some(m => !m.borrado && m.fecha.startsWith(mes) && ahorroCta.has(m.tipo === 'transferencia' ? m.cuentaDestinoId : m.tipo === 'ingreso' ? m.cuentaId : ''));
+      if (!yaAhorro) animo(mes + '-20', 12, T.animoAhorroT, T.animoAhorro);
+      animo(L.sumarMeses(mes, 1) + '-20', 12, T.animoAhorroT, T.animoAhorro);
+    }
+    if (op.corte !== false) {
+      for (const c of vivos(d.cuentas).filter(c => c.tipo === 'credito' && c.diaCorte && !c.parDe)) {
+        const fecha = L.proximaFecha({ frec: 'mensual', dia: c.diaCorte }, h);
+        const t = a(fecha, hora); if (t > ahoraMs) out.push({ at: t, titulo: T.avisoCorteT(c.banco || c.nombre), cuerpo: T.avisoCorte });
+      }
+    }
+    if (op.sinGastos !== false) {
+      const anoto = new Set((d.movimientos || []).filter(m => !m.borrado && m.tipo !== 'saldo').map(m => m.fecha));
+      for (let k = 0; k < 7; k++) { const fecha = L.sumarDias(h, k); if (!anoto.has(fecha)) animo(fecha, 20, T.animoGastosT, T.animoGastos[k % T.animoGastos.length]); }
+    }
     return out.sort((x, y) => x.at - y.at).slice(0, 60);
   }
 

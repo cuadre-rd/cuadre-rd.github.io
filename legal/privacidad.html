@@ -10,18 +10,52 @@ a { color: var(--azul); font-weight: 600; }
 h2 { font-size: 1.7rem; line-height: 1.2; margin: 18px 0 8px; }
 p, li { color: var(--texto); } p:first-of-type { color: var(--suave); }
 .volver { display: inline-block; margin-bottom: 8px; }
+.resumen { background: rgb(255 255 255 / .55); border-radius: 18px; padding: 16px 18px; margin: 14px 0; }
+@media (prefers-color-scheme: dark) { .resumen { background: rgb(255 255 255 / .06); } }
+h3 { font-size: 1.15rem; margin: 22px 0 6px; }
 </style></head>
 <body><main><a class="volver" href="../">← Volver a Cuadre</a>
 <h2>Política de privacidad de Cuadre</h2>
-<p>Vigente desde el 22 de noviembre de 2026.</p>
-<p>Cuadre, en República Dominicana, es responsable del tratamiento de los datos personales descritos en esta política. Para consultas o solicitudes, escribe a <a href="mailto:cuadre.app.rd@gmail.com">cuadre.app.rd@gmail.com</a>. Cuadre es una app de finanzas personales con el lema «Cuadra tus cuartos». Funciona como app web instalable (PWA) en https://cuadre-rd.github.io/ y como app de Android.</p>
-<p><strong>Datos que permanecen en tu dispositivo.</strong> Tus cuentas, movimientos, presupuestos, metas y fotos de facturas se guardan solo en tu teléfono o navegador. No los enviamos a ningún servidor. Puedes respaldarlos en un archivo y restaurarlos. La lectura de facturas (OCR) ocurre dentro del teléfono; la foto no se envía a internet.</p>
-<p>La «bóveda» cifra las cuentas privadas con tu PIN mediante AES-GCM. Si olvidas el PIN, no hay forma de recuperarlo ni de abrir esas cuentas. Si usas huella o reconocimiento facial, esas funciones las maneja el propio teléfono mediante passkey o Android Keystore. Cuadre no ve ni guarda tus huellas.</p>
-<p><strong>Cuenta opcional.</strong> Puedes usar la app sin crear una cuenta. Si creas una, guardamos solo tu correo, nombre y contraseña cifrada por nuestro proveedor de autenticación, Supabase, cuyos servidores están en Estados Unidos. Cuadre nunca ve tu contraseña. No usamos esos datos para anuncios. No vendemos ni compartimos datos con terceros para publicidad y no usamos los datos de usuarios para entrenar inteligencia artificial.</p>
-<p><strong>Buzón de sugerencias.</strong> Si envías una sugerencia, guardamos el texto que escribes, el tipo (idea, algo falla u otro), la versión de la app, si la usas en la web, instalada o en Android, la fecha y, si tienes cuenta, a qué cuenta pertenece. No se envía ningún dato de tus finanzas. Las lee solo el equipo de Cuadre para mejorar la app. Si borras tu cuenta, tus sugerencias quedan sin dueño.</p>
-<p><strong>Borrar tus datos.</strong> Puedes borrar tu cuenta desde Ajustes → Mi cuenta → Borrar mi cuenta o escribiendo al correo de contacto. Al borrarla, eliminamos del servidor tu correo, nombre y perfil. Los datos que estén en tu teléfono o navegador los borras tú al desinstalar la app o desde el navegador.</p>
-<p><strong>Tus derechos.</strong> Según la Ley 172-13 de República Dominicana sobre protección de datos personales, puedes solicitar acceso, rectificación, cancelación u oponerte al tratamiento de tus datos. Escríbenos a cuadre.app.rd@gmail.com e indica tu solicitud y el correo asociado a la cuenta, si tienes una. Responderemos en un plazo razonable. Como los datos financieros permanecen en tu dispositivo, puedes consultarlos y gestionarlos directamente allí.</p>
-<p>La app es para personas de 13 años o más. Si tienes menos de 18, debes contar con permiso de tu madre, padre o tutor.</p>
-<p>Si cambiamos esta política, avisaremos dentro de la app. La app es gratis hoy; si en el futuro ofrecemos un plan de pago, avisaremos y actualizaremos estos documentos. Se aplica la ley de República Dominicana.</p>
+<p>Vigente desde el 25 de noviembre de 2026.</p>
+<div class="resumen">
+<strong>En pocas palabras</strong>
+<ul>
+<li>✅ Tus finanzas y facturas se quedan en tu teléfono o navegador. Nadie las ve, ni siquiera Cuadre.</li>
+<li>✅ De tus tarjetas solo se guardan los 4 últimos números, nunca el número completo.</li>
+<li>✅ La cuenta es opcional; si la creas, el servidor guarda tu perfil y membresía.</li>
+<li>✅ No hay anuncios, venta de datos ni uso de datos para entrenar IA.</li>
+<li>✅ Puedes borrar tu cuenta en la app; los datos locales los borras desde tu dispositivo.</li>
+<li>✅ Las notificaciones se programan en tu dispositivo y puedes apagarlas.</li>
+</ul>
+</div>
+<h3>¿Qué datos guarda Cuadre?</h3>
+<p>Tus cuentas, movimientos, presupuestos, metas y fotos de facturas se guardan solo en tu teléfono o navegador. No se envían a ningún servidor; hoy no hay sincronización en la nube de las finanzas.</p>
+<p>La lectura de facturas (OCR) ocurre dentro del teléfono. La foto no sale de tu dispositivo.</p>
+<p>De tus tarjetas guardamos solo los últimos cuatro números y la fecha de vencimiento. Nunca guardamos el número completo ni el código de seguridad.</p>
+<h3>¿Quién puede ver mis finanzas?</h3>
+<p>Las finanzas se quedan en tu dispositivo y puedes hacer un respaldo exportándolas a un archivo que guardas tú. Cuadre te avisa si pasan siete días sin hacer un respaldo.</p>
+<p>La bóveda cifra las cuentas privadas con tu PIN usando AES-GCM de 256 bits. Si olvidas el PIN, no hay forma de recuperarlo. La huella o la cara las maneja tu teléfono mediante passkey o Android Keystore; Cuadre no ve tus huellas.</p>
+<h3>¿Cómo funcionan los avisos?</h3>
+<p>Los avisos de pagos y cobro de nómina se programan dentro del teléfono y no pasan por servidores. Puedes apagarlos cuando quieras.</p>
+<h3>¿Qué pasa si creo una cuenta?</h3>
+<p>La cuenta es opcional. Si la creas, se guardan tu correo, nombre y contraseña en Supabase, cuyos servidores están en Estados Unidos; Cuadre nunca ve tu contraseña.</p>
+<p>En el servidor también se guarda el plan que elegiste y su fecha de vencimiento.</p>
+<h3>¿Qué pasa cuando pague un plan?</h3>
+<p>El pago lo procesa PayPal (en la web) o Google Play (en Android). Cuadre solo recibe la confirmación del pago y la fecha de vencimiento de tu plan; nunca ve ni guarda los datos de tu tarjeta de pago.</p>
+<h3>¿Qué datos recoge el buzón de sugerencias?</h3>
+<p>Guarda el texto, el tipo de sugerencia, la versión de la app, la plataforma, la fecha y la cuenta asociada, si tienes una. No incluye datos financieros.</p>
+<h3>¿Hay anuncios o se comparten mis datos?</h3>
+<p>Cuadre no tiene anuncios, no vende ni comparte datos para publicidad y no usa datos para entrenar inteligencia artificial.</p>
+<h3>¿Cómo borro mi cuenta y mis datos?</h3>
+<p>Ve a <strong>Ajustes → Mi cuenta → Borrar mi cuenta</strong>, o solicita el borrado por correo a <a href="mailto:cuadre.app.rd@gmail.com">cuadre.app.rd@gmail.com</a>.</p>
+<p>Al borrar la cuenta, se eliminan del servidor tu correo, nombre, perfil y membresía. Para borrar los datos de finanzas guardados en tu teléfono o navegador, desinstala la app o limpia los datos del navegador.</p>
+<h3>¿Qué derechos tengo según la Ley 172-13?</h3>
+<p>Puedes solicitar acceso, rectificación, cancelación u oposición al tratamiento de tus datos personales. Escribe a <a href="mailto:cuadre.app.rd@gmail.com">cuadre.app.rd@gmail.com</a>; responderemos en un plazo razonable.</p>
+<p>Como tus datos financieros están en tu dispositivo, puedes consultarlos y gestionarlos allí.</p>
+<h3>¿Quién puede usar Cuadre?</h3>
+<p>La app es para personas de 13 años o más. Si tienes menos de 18 años, necesitas permiso de tu madre, padre o tutor.</p>
+<h3>¿Quién es responsable y cómo me entero de cambios?</h3>
+<p>El responsable es Cuadre, en República Dominicana. Si cambiamos esta política, avisaremos dentro de la app.</p>
+<p>Se aplica la ley de República Dominicana.</p>
 <p><a href="privacidad.html">Privacidad</a> · <a href="terminos.html">Términos</a> · <a href="mailto:cuadre.app.rd@gmail.com">cuadre.app.rd@gmail.com</a></p>
 </main></body></html>

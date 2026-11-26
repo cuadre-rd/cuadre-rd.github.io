@@ -657,6 +657,7 @@ window.Secciones = function (W) {
       </div>
       <div data-m="ahorro"><div class="dos">${campo('inicial', T.montoInicial)}${campo('aporte', T.aporteMensual)}${campo('tasa', T.tasaAnual)}
         <label class="campo">${T.mesesEt}<input name="meses" type="number" min="1" max="600" value="${esc(v.meses)}"></label></div>${campo('retencion', T.retencion)}</div>
+      <button type="button" class="pildora oscura ancho" data-accion="calc-ir">🧮 ${T.calcVer}</button>
       </section>
       <section class="tarjeta resultado" id="calc-res"></section>
       ${guardados.length ? `<h2 class="sub">${T.calculosGuardados}</h2><ul class="lista">${guardados.slice().reverse().map(c => `<li><button class="fila" data-accion="calc-abrir" data-id="${esc(c.id)}">
@@ -755,6 +756,7 @@ window.Secciones = function (W) {
 'meta-editar': () => hojaMeta(buscar('metas', id)), 'meta-aportar': () => aportarMeta(buscar('metas', id)),
       'sam-nuevo': () => hojaSam(), 'sam-ver': () => hojaSamDetalle(buscar('sams', id)),
       'encargo-nuevo': () => hojaEncargo(), 'encargo-ver': () => hojaEncargo(buscar('encargos', id)),
+      'calc-ir': () => { if (document.activeElement) document.activeElement.blur(); const r = $('#calc-res'); if (r) r.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, // v23: «¿a qué le doy para calcular?»
       'calc-tabla': () => calc.ultimo && hojaTabla(calc.ultimo.r, W.P()),
       'calc-guardar': guardarCalculo, 'calc-abrir': () => abrirCalculo(buscar('calculos', id)),
       'calc-real': () => calc.ultimo && W.hojaPrestamo('deuda', calc.ultimo.plan),
