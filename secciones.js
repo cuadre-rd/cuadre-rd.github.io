@@ -8,7 +8,7 @@ window.Secciones = function (W) {
   const buscar = (k, id) => (D()[k] || []).find(x => x.id === id);
   const nuevo = (k, obj) => { const t = ahora(); const x = { id: L.uuid(), creado: t, editado: t, borrado: false, ...obj }; D()[k].push(x); return x; };
   let sub = 'plan';
-  const SUBS = ['plan', 'fijos', 'nomina', 'metas', 'sam', 'encargos'];
+  const SUBS = ['plan', 'deudas', 'hogar', 'fijos', 'nomina', 'metas', 'sam', 'encargos'];
 
   // ---------- repetición (mensual, quincenal, semanal, cada N días, anual, una vez) ----------
   const DIAS_SEM = [1, 2, 3, 4, 5, 6, 0];
@@ -58,8 +58,10 @@ window.Secciones = function (W) {
 
   // ---------- vista Planes ----------
   function vPlanes() {
-    const cuerpo = { plan: vPlan, fijos: vFijos, nomina: vNomina, metas: vMetas, sam: vSam, encargos: vEncargos }[sub]();
-    return `<div class="pestanas" role="tablist">${SUBS.map(s => `<button role="tab" data-accion="plan-sub" data-sub="${s}" aria-selected="${s === sub}">${T.subPlan[s]}</button>`).join('')}</div>${cuerpo}`;
+    const cuerpo = { plan: vPlan, deudas: vDeudas, hogar: vHogar, fijos: vFijos, nomina: vNomina, metas: vMetas, sam: vSam, encargos: vEncargos }[sub]();
+    const idAy = { plan: 'miPlan' }[sub] || sub;
+    return `<div class="pestanas" role="tablist">${SUBS.map(s => `<button role="tab" data-accion="plan-sub" data-sub="${s}" aria-selected="${s === sub}">${T.subPlan[s]}</button>`).join('')}</div>
+      ${T.ayuda[idAy] ? `<button class="enlace como-funciona" data-ayuda="${idAy}">❓ ${T.comoFunciona(T.subPlan[sub])}</button>` : ''}${cuerpo}`;
   }
   const vacioTxt = (txt, accion, boton) => `<section class="tarjeta centro vacia-plan"><p>${txt}</p><button class="pildora oscura" data-accion="${accion}">${ico('mas')} ${boton}</button></section>`;
 
@@ -67,7 +69,7 @@ window.Secciones = function (W) {
   const CS = window.Consejos;
   let aporteProy = null, tasaProy = 0;
   function vPlan() {
-    const d = D(), p = CS.plan(d, L.hoy()), P = W.P();
+    const d = D(), p = CS.plan(d, L.hoy()), P = W.P(), pres = d.ajustes.presupuestos || {};
     const ciudades = Object.keys(CS.CIUDADES[d.ajustes.pais] || {});
     const colores = { necesidades: 'var(--azul)', deseos: 'var(--morado)', ahorro: 'var(--verde)' };
     const estadoIco = { ok: '✓', justo: '≈', pasado: '!' };
@@ -80,6 +82,12 @@ window.Secciones = function (W) {
     const lg = CS.logros(d, L.hoy());
     return `
       <section class="tarjeta">${ubicacion(d, ciudades)}${campoIngreso(d, p)}</section>
+      <section class="tarjeta arma-plan"><h2>🧩 ${T.armaPlanT}</h2><p class="nota">${T.armaPlanTxt}</p><div class="arma-botones">
+        <button class="pildora" data-accion="nomina-nueva">💼 ${T.armaNomina}</button><button class="pildora" data-accion="fijo-nuevo">📌 ${T.armaFijo}</button>
+        <button class="pildora" data-accion="cat-nueva-plan">🏷️ ${T.armaCat}</button><button class="pildora" data-accion="nuevo-prestamo">🏦 ${T.armaDeuda}</button>
+        <button class="pildora" data-accion="meta-nueva">🎯 ${T.armaMeta}</button></div></section>
+      ${vivos('fijos').length ? '' : `<section class="tarjeta pide-fijos"><p>📌 ${T.pideFijos}</p><button class="pildora oscura ancho" data-accion="fijo-nuevo">➕ ${T.agregarFijo}</button></section>`}
+      ${vAlcanza(d)}${vRecortes(d)}
       <section class="tarjeta">
         <h2>🧭 ${T.comoDividir}</h2>
         <div class="reglas">${Object.keys(CS.REGLAS).map(r => `<button class="regla ${r === p.regla ? 'sel' : ''}" data-accion="plan-regla" data-regla="${r}">
@@ -89,12 +97,18 @@ window.Secciones = function (W) {
         <div class="grupos">${['necesidades', 'deseos', 'ahorro'].map(k => `<div><small><i style="background:${colores[k]}"></i>${T.grupos[k]} · ${p.porcentajes[k]} %</small><b>${din(p.grupos[k])}</b></div>`).join('')}</div>
       </section>
       <section class="tarjeta">
-        <h2>🎯 ${T.cuantoGastar}</h2><p class="nota">${T.cuantoGastarTxt}</p>
-        ${['necesidades', 'deseos'].map(gr => `<h3>${T.grupos[gr]}</h3><ul class="lista-plana plan-cats">${p.filas.filter(f => f.grupo === gr).map(f => `<li class="${f.estado}">
-          <span class="ico" style="--c:${cat(f.id).color}">${cat(f.id).icono}</span><span class="txt"><b>${esc(catNombre(f.id))}</b><small>${T.gastasPromedio} ${din(f.real)}</small></span>
-          <span class="plan-monto"><b>${din(f.sugerido)}</b><small class="estado-${f.estado}">${estadoIco[f.estado]} ${T.estadoPlan[f.estado]}</small></span></li>`).join('')}</ul>`).join('')}
+        <h2 id="mi-presupuesto">🎯 ${T.presupuestoPlanT}</h2><p class="nota">${T.presupuestoPlanTxt}</p>
+        ${['necesidades', 'deseos'].map(gr => `<h3>${T.grupos[gr]}</h3><ul class="lista-plana plan-cats">${p.filas.filter(f => f.grupo === gr).map(f => `<li class="${f.estado} tocable" data-plan-fila="${esc(f.id)}">
+          <span class="ico" style="--c:${cat(f.id).color}">${cat(f.id).icono}</span><span class="txt"><b>${esc(catNombre(f.id))}</b><small>${f.propio ? T.pagasReal(din(f.real)) : f.fijo ? T.pagoFijoReal(din(f.real)) : T.gastasPromedio + ' ' + din(f.real)}</small></span>
+          <span class="plan-monto"><b>${din(pres[f.id] || f.sugerido)}</b><small>${pres[f.id] ? T.tuLimite : T.sugeridoCorto}</small><small class="estado-${f.estado}">${estadoIco[f.estado]} ${T.estadoPlan[f.estado]}</small></span>
+          <div class="plan-edit" hidden><div class="dos"><label class="campo">${T.miMontoReal} (${sim(W.P())})<input data-plan-real="${esc(f.id)}" inputmode="decimal" autocomplete="off" value="${f.propio ? aInput(f.real) : ''}" placeholder="${aInput(f.real) || '0.00'}"></label>
+            <label class="campo">${T.miLimite} (${sim(W.P())})<input data-plan-limite="${esc(f.id)}" inputmode="decimal" autocomplete="off" value="${pres[f.id] ? aInput(pres[f.id]) : ''}" placeholder="${aInput(f.sugerido) || '0.00'}"></label></div>
+            <small class="nota">${T.miMontoRealTxt}</small><button type="button" class="enlace peligro" data-plan-nouso="${esc(f.id)}">🙈 ${T.noUsoCat}</button></div></li>`).join('')}</ul>`).join('')}
         ${p.costo === 'alto' ? `<p class="nota">🏠 ${T.topeVivienda(din(p.topeVivienda), CS.VIVIENDA[p.costo])}</p>` : ''}
+        <p class="nota">✏️ ${T.planTocaCat}</p>
+        <button class="pildora ancho" data-accion="cat-nueva-plan">➕ ${T.agregarCatPlan}</button>
         <button class="pildora oscura ancho" data-accion="plan-aplicar">${T.usarComoPresupuesto}</button>
+        <p class="nota">${T.presupuestoEsPlan}</p>
       </section>
       <section class="tarjeta">
         <h2>🛟 ${T.fondoTitulo}</h2>
@@ -119,6 +133,130 @@ window.Secciones = function (W) {
       </section>
       ${vLogros(lg)}`;
   }
+  // ---------- v24: ¿me alcanza el sueldo?, dónde recortar y plan para salir de deudas ----------
+  const mesLargo = m => new Date(Number(m.slice(0, 4)), Number(m.slice(5, 7)) - 1, 1).toLocaleDateString('es-DO', { month: 'long', year: 'numeric' });
+  function vAlcanza(d) {
+    const a = CS.alcanza(d, L.hoy()); if (!a.ingreso) return '';
+    const fila = (t, v, signo) => `<li><span>${t}</span><b>${signo}${din(v)}</b></li>`;
+    return `<section class="tarjeta alcanza ${a.nivel}"><h2>🧾 ${d.ajustes.hogar && d.ajustes.hogar.activo ? T.alcTHogar : T.alcT}</h2><ul class="cuenta-mes">
+      ${fila('💼 ' + T.alcCobras, a.ingreso, '')}${a.fijos ? fila('🏠 ' + T.fijos, a.fijos, '− ') : ''}${a.cuotas ? fila('🏦 ' + T.alcCuotas, a.cuotas, '− ') : ''}${a.tarjetas ? fila('💳 ' + T.alcTarjetas, a.tarjetas, '− ') : ''}
+      <li class="total"><span>${a.queda >= 0 ? T.alcQueda : T.alcFalta}</span><b>${din(Math.abs(a.queda))}</b></li></ul>
+      <p class="nota">${a.nivel === 'verde' ? T.alcVerde(din(Math.round(a.queda * 0.3))) : a.nivel === 'amarillo' ? T.alcAmarillo : T.alcRojo}</p>
+      ${a.nivel !== 'verde' && CS.deudas(d).length ? `<button class="pildora oscura ancho" data-accion="plan-sub" data-sub="deudas">🎯 ${T.verPlanDeudas}</button>` : ''}</section>`;
+  }
+  function vRecortes(d) {
+    const r = CS.recortes(d, L.hoy()); if (!r.cats.length && !r.gustos) return '';
+    const ds = CS.deudas(d), pd = d.ajustes.planDeudas || {};
+    let menos = 0;
+    if (ds.length && r.total > 0) {
+      const pago = pd.pago > 0 ? pd.pago : Math.round(ds.reduce((s, x) => s + x.minimo, 0) * 1.2);
+      const a = CS.planDeudas(ds, pago, pd.metodo), b = CS.planDeudas(ds, pago + r.total, pd.metodo);
+      if (a.meses && b.meses) menos = a.meses - b.meses;
+    }
+    return `<section class="tarjeta"><h2>✂️ ${T.recT}</h2><ul class="consejos">
+      ${r.cats.map(x => `<li>${cat(x.id).icono} ${x.grupo === 'necesidades' ? T.recCatNec(esc(catNombre(x.id)), din(x.real), din(x.sugerido), din(x.ahorro)) : T.recCat(esc(catNombre(x.id)), din(x.real), din(x.sugerido), din(x.ahorro))}</li>`).join('')}
+      ${r.gustos ? `<li>📺 ${T.recGustos(r.gustos, din(r.gustosMes))}</li>` : ''}
+      ${menos > 0 ? `<li>🎯 ${T.recDeudas(din(r.total), menos)}</li>` : ''}</ul><p class="nota">${T.avisoConsejos}</p></section>`;
+  }
+  function vDeudas() {
+    const d = D(), ds = CS.deudas(d);
+    if (!ds.length) return `<section class="tarjeta centro vacia-plan"><p>${T.sinDeudas}</p></section>`;
+    const pd = d.ajustes.planDeudas || {}, metodo = pd.metodo === 'bola' ? 'bola' : 'avalancha';
+    const minTot = ds.reduce((s, x) => s + x.minimo, 0), total = ds.reduce((s, x) => s + x.saldo, 0);
+    const p = CS.plan(d, L.hoy()), sugerido = Math.max(minTot + ((p.ingreso.monto && p.ahorro.deudas) || 0), Math.round(minTot * 1.2));
+    const pago = pd.pago > 0 ? pd.pago : sugerido;
+    const r = CS.planDeudas(ds, pago, metodo), base = CS.planDeudas(ds, 0, metodo, true), obj = CS.objetivoDeudas(ds, metodo);
+    const hoyM = L.hoy().slice(0, 7);
+    return `<section class="tarjeta"><div class="sub-fila"><h2>📋 ${T.misDeudasT}</h2><b>${din(total)}</b></div>
+      <ul class="lista-plana">${ds.map(x => `<li class="deuda-fila"><span class="txt"><b>${x.tipo === 'tarjeta' ? '💳' : '🏦'} ${esc(x.nombre)}</b>
+        <small>${T.interesAnual(x.tasaAnual)}${x.supuesta ? ' ' + T.supuesta : ''} · ${T.minimoMes} ${din(x.minimo)}</small></span><b>${din(x.saldo)}</b></li>`).join('')}</ul>
+      ${ds.some(x => x.supuesta) ? `<p class="nota">ℹ️ ${T.tasaSupuesta}</p>` : ''}</section>
+      <section class="tarjeta deudas-plan"><h2>🎯 ${T.planDeudasT}</h2>
+      <label class="campo">${T.pagoMensual} (${sim(W.P())})<input id="deuda-pago" inputmode="decimal" autocomplete="off" value="${aInput(pago)}"></label>
+      <p class="nota">${T.pagoSugerido(din(minTot), din(sugerido))}</p>
+      ${segmento('deuda-metodo', [['avalancha', '🏔️ ' + T.avalancha], ['bola', '⛄ ' + T.bolaNieve]], metodo)}
+      <p class="nota">${metodo === 'bola' ? T.bolaTxt : T.avalanchaTxt}</p>
+      ${r.falta ? `<p class="aviso-rojo">⚠️ ${T.deudaFalta(din(r.falta))}</p>` : r.meses == null ? `<p class="aviso-rojo">⚠️ ${T.deudaNunca}</p>` : `
+        <div class="libre"><small>${T.salesEn}</small><b>${mesLargo(L.sumarMeses(hoyM, r.meses))}</b><small>${T.enMeses(r.meses)} · ${T.pagasInteres(din(r.interes))}</small></div>
+        <p class="grande">${base.meses == null ? T.soloMinNunca : base.interes > r.interes ? T.ahorrasInt(din(base.interes - r.interes), base.meses - r.meses) : ''}</p>
+        ${obj ? `<p class="nota">👉 ${T.esteMes(esc(obj.nombre))}</p>` : ''}
+        <h3>${T.ordenPago}</h3><ol class="orden-deudas">${r.orden.map(o => `<li><b>${esc(o.nombre)}</b> <small>${T.saldadaEn(mesLargo(L.sumarMeses(hoyM, o.mes)))}</small></li>`).join('')}</ol>`}
+      <p class="nota">${T.avisoConsejos}</p></section>`;
+  }
+  // v24: Hogar (tú y tu pareja, sin que la pareja use Cuadre).
+  function vHogar() {
+    const d = D(), hg = d.ajustes.hogar || {}, x = CS.hogar(d, L.hoy()), pct = v => Math.round(v * 100) + ' %';
+    const cab = `<section class="tarjeta"><h2>🏡 ${T.hogarT}</h2><p class="nota">${T.hogarTxt}</p>
+      <label class="interruptor"><span>${T.hogarActivar}</span><input type="checkbox" id="hogar-activo" ${hg.activo ? 'checked' : ''}><i></i></label>
+      <label class="campo">${T.hogarPareja}<input id="hogar-pareja" maxlength="30" autocomplete="off" value="${esc(hg.pareja || '')}" placeholder="${T.duenoPareja}"></label></section>`;
+    if (!hg.activo) return cab;
+    const nombreP = esc(hg.pareja) || T.duenoPareja;
+    if (!x.pareja) return cab + `<section class="tarjeta centro vacia-plan"><p>${T.hogarSinPareja(nombreP)}</p><button class="pildora oscura" data-accion="nomina-nueva">${ico('mas')} ${T.nuevaNomina}</button></section>`;
+    return cab + `<section class="tarjeta"><h2>💼 ${T.hogarIngreso}</h2><div class="desglose">
+        <div><small>🙋 ${T.duenoYo} · ${pct(x.yo / x.total)}</small><b>${din(x.yo)}</b></div><div><small>💑 ${nombreP} · ${pct(x.pareja / x.total)}</small><b>${din(x.pareja)}</b></div>
+        <div class="total"><small>${T.hogarTotal}</small><b>${din(x.total)}</b></div></div></section>
+      ${vAlcanza(d)}
+      <section class="tarjeta"><h2>⚖️ ${T.hogarAporte}</h2>
+        ${segmento('hogar-reparto', [['proporcional', T.hogarProporcional], ['mitad', T.hogarMitad]], x.mitad ? 'mitad' : 'proporcional')}
+        <p class="nota">${x.mitad ? T.hogarMitadTxt : T.hogarProporcionalTxt}</p>
+        ${x.fijos ? `<div class="desglose"><div><small>🙋 ${T.duenoYo} · ${pct(x.pctYo)}</small><b>${din(x.aporteYo)}</b></div><div><small>💑 ${nombreP} · ${pct(x.pctPareja)}</small><b>${din(x.aportePareja)}</b></div>
+          <div class="total"><small>${T.hogarFijos}</small><b>${din(x.fijos)}</b></div></div>` : `<p class="nota">📌 ${T.pideFijos}</p><button class="pildora ancho" data-accion="fijo-nuevo">➕ ${T.agregarFijo}</button>`}
+      </section>
+      ${vCuentasClaras(d, x, nombreP)}
+      <section class="tarjeta"><div class="sub-fila"><h2>🎯 ${T.metasHogar}</h2><button class="enlace" data-accion="meta-nueva">${ico('mas')} ${T.nuevaMeta}</button></div>
+        ${vivos('metas').filter(m => m.hogar).map(m => { const e = PL.meta(d, m, L.hoy()); return `<div class="meta-hogar"><b>${esc(m.icono || '🎯')} ${esc(m.nombre)}</b><small>${din(e.actual)} / ${din(m.objetivo)} · ${Math.round(e.pct * 100)} %</small><i style="--p:${Math.round(e.pct * 100)}%"></i></div>`; }).join('') || `<p class="nota">${T.metasHogarVacio}</p>`}</section>
+      <section class="tarjeta"><h2>💡 ${T.hogarConsejosT}</h2><ul class="consejos">${T.hogarConsejos.map(c => `<li>${c}</li>`).join('')}</ul><p class="nota">${T.avisoConsejos}</p></section>`;
+  }
+  const nombrePareja = () => esc((D().ajustes.hogar || {}).pareja) || T.duenoPareja;
+  function vCuentasClaras(d, x, nombreP) {
+    const b = x.balance, abs = Math.abs(b);
+    return `<section class="tarjeta"><div class="sub-fila"><h2>🧾 ${T.gastosCompartidos}</h2><button class="enlace" data-accion="hogar-gasto">${ico('mas')} ${T.agregar}</button></div>
+      <p class="nota">${T.gastosCompartidosTxt(nombreP)}</p>
+      ${x.gastos.length ? `<ul class="lista-plana">${x.gastos.slice().sort((p, q) => q.fecha.localeCompare(p.fecha)).map(g => `<li class="hg-fila"><span class="txt"><b>${cat(g.categoriaId).icono} ${esc(g.nota || catNombre(g.categoriaId))}</b>
+        <small>${fechaCorta(g.fecha)} · ${T.duenoYo} ${din(g.yo || 0)} · ${nombreP} ${din(g.pareja || 0)}</small></span><b>${din((g.yo || 0) + (g.pareja || 0))}</b>
+        <button type="button" class="icono-btn" data-accion="hogar-gasto-borrar" data-id="${esc(g.id)}" aria-label="${T.borrar}">🗑️</button></li>`).join('')}</ul>` : ''}
+      <h3>⚖️ ${T.cuentasClaras}</h3>
+      <div class="desglose"><div><small>🙋 ${T.hogarPusiste}</small><b>${din(x.pusoYo)}</b></div><div><small>💑 ${T.puso(nombreP)}</small><b>${din(x.pusoPareja)}</b></div>
+        <div><small>${T.teTocaba}</small><b>${din(x.tocaYo)}</b></div><div><small>${T.leTocaba(nombreP)}</small><b>${din(x.tocaPareja)}</b></div></div>
+      <p class="grande">${abs < 100 ? T.estanAMano : b > 0 ? T.hogarTeDebe(nombreP, din(abs)) : T.hogarLeDebes(nombreP, din(abs))}</p>
+      ${abs >= 100 ? `<button class="pildora ancho" data-accion="hogar-saldar">🤝 ${T.saldar}</button>` : ''}
+      <p class="nota">${T.cuentasClarasTxt}</p></section>`;
+  }
+  // Gasto compartido: el total, lo que puso la pareja (el resto lo pusiste tú) y, si quieres, tu parte se anota en tus cuentas.
+  function hojaGastoHogar() {
+    const d = D(), np = nombrePareja();
+    const f = abrirHoja(`<h2>🧾 ${T.gastoCompartido}</h2>
+      <label class="campo">${T.queFue}<input name="nota" maxlength="40" autocomplete="off" placeholder="${T.queFueEj}"></label>
+      <label class="campo">${T.categoria}<select name="cat">${opcionesCats('gasto', 'c-comida')}</select></label>
+      <div class="dos"><label class="campo">${T.totalGasto} (${sim(W.P())})<input name="total" inputmode="decimal" autocomplete="off" placeholder="0.00"></label>
+        <label class="campo">${T.puso(np)} (${sim(W.P())})<input name="pareja" inputmode="decimal" autocomplete="off" placeholder="0.00"></label></div>
+      <p class="nota" data-tu-parte>${T.tuParte(din(0))}</p>
+      <label class="campo">${T.fecha}<input type="date" name="fecha" value="${L.hoy()}"></label>
+      <label class="interruptor"><span>${T.anotarMiParte}</span><input type="checkbox" name="anotar" checked><i></i></label>
+      <label class="campo">${T.pagarDesde}<select name="cuenta">${opcionesCuentas(null, { tipos: ['diaria', 'ahorro', 'credito'] })}</select></label>`, fd => {
+      const total = L.parseMonto(fd.get('total')), pareja = String(fd.get('pareja') || '').trim() ? L.parseMonto(fd.get('pareja')) : 0;
+      if (!total || pareja === null || pareja > total) return T.montoInvalido;
+      const yo = total - pareja, fecha = fd.get('fecha') || L.hoy(), g = nuevo('hogarGastos', { tipo: 'gasto', fecha, nota: String(fd.get('nota') || '').trim(), categoriaId: fd.get('cat'), yo, pareja });
+      if (yo > 0 && fd.get('anotar') === 'on' && fd.get('cuenta')) {
+        const m = nuevoMov({ tipo: 'gasto', cuentaId: fd.get('cuenta'), monto: yo, fecha, categoriaId: fd.get('cat'), nota: g.nota || T.gastoCompartido, ref: { tipo: 'hogar', id: g.id } });
+        g.movId = m.id;
+      }
+      guardar(T.guardado);
+    });
+    const parte = () => { const t = L.parseMonto(f.total.value) || 0, p = L.parseMonto(f.pareja.value) || 0; f.querySelector('[data-tu-parte]').textContent = T.tuParte(din(Math.max(0, t - p))); };
+    f.total.oninput = parte; f.pareja.oninput = parte;
+  }
+  function conectarHogar() {
+    const d = D(), hg = () => d.ajustes.hogar || (d.ajustes.hogar = {});
+    const a = $('#hogar-activo'); if (a) a.onchange = () => { hg().activo = a.checked; guardar(T.guardado); };
+    const p = $('#hogar-pareja'); if (p) p.onchange = () => { hg().pareja = p.value.trim() || undefined; guardar(T.guardado); };
+    document.querySelectorAll('[name="hogar-reparto"]').forEach(r => r.onchange = () => { hg().reparto = r.value; guardar(T.guardado); });
+  }
+  function conectarDeudas() {
+    const d = D(), e = $('#deuda-pago');
+    if (e) e.onchange = () => { const m = L.parseMonto(e.value); if (!m) return aviso(T.montoInvalido, true); d.ajustes.planDeudas = { ...(d.ajustes.planDeudas || {}), pago: m }; guardar(T.guardado); };
+    document.querySelectorAll('[name="deuda-metodo"]').forEach(x => x.onchange = () => { d.ajustes.planDeudas = { ...(d.ajustes.planDeudas || {}), metodo: x.value }; guardar(T.guardado); });
+  }
   const proyHtml = pr => [['anio1', 1], ['anio3', 3], ['anio5', 5]].map(([k, n]) => `<div><small>${T.enAnios(n)}</small><b>${din(pr[k], W.P(), true)}</b></div>`).join('');
   function vLogros(lg) {
     return `<section class="tarjeta"><div class="sub-fila"><h2>🏆 ${T.misLogros}</h2><small>${lg.hechos}/${lg.total}</small></div>
@@ -137,6 +275,21 @@ window.Secciones = function (W) {
   }
   function conectarPlan() {
     const d = D();
+    document.querySelectorAll('[data-plan-fila]').forEach(li => li.addEventListener('click', ev => {
+      if (ev.target.closest('.plan-edit')) return;
+      const e = li.querySelector('.plan-edit'); e.hidden = !e.hidden; if (!e.hidden) e.querySelector('input').focus();
+    }));
+    document.querySelectorAll('[data-plan-real]').forEach(inp => inp.addEventListener('change', () => {
+      const v = inp.value.trim(), m = v ? L.parseMonto(v) : 0; if (m === null) return aviso(T.montoInvalido, true);
+      const pp = { ...(d.ajustes.planPropio || {}) }; if (m) pp[inp.dataset.planReal] = m; else delete pp[inp.dataset.planReal];
+      d.ajustes.planPropio = pp; guardar(T.guardado);
+    }));
+    document.querySelectorAll('[data-plan-limite]').forEach(inp => inp.addEventListener('change', () => {
+      const v = inp.value.trim(), m = v ? L.parseMonto(v) : 0; if (m === null) return aviso(T.montoInvalido, true);
+      const pr = { ...(d.ajustes.presupuestos || {}) }; if (m) pr[inp.dataset.planLimite] = m; else delete pr[inp.dataset.planLimite];
+      d.ajustes.presupuestos = pr; guardar(T.guardado);
+    }));
+    document.querySelectorAll('[data-plan-nouso]').forEach(b => b.addEventListener('click', () => noUsoCat(b.dataset.planNouso)));
     const cambia = (id, fn) => { const e = $('#' + id); if (e) e.onchange = () => { fn(e.value.trim()); guardar(T.guardado); }; };
     cambia('plan-ciudad', v => { d.ajustes.ciudad = v || undefined; const c = (CS.CIUDADES[d.ajustes.pais] || {})[v]; if (c) d.ajustes.costoVida = c; });
     cambia('plan-costo', v => { d.ajustes.costoVida = v; });
@@ -150,6 +303,14 @@ window.Secciones = function (W) {
     };
     s.oninput = () => { aporteProy = Number(s.value) * 100; proy(); };
     document.querySelectorAll('[name=plan-tasa]').forEach(r => { r.onchange = () => { tasaProy = Number(r.value); proy(); }; });
+  }
+  // v24: «No uso esta categoría»: se oculta (igual que en Ajustes → Categorías) y sale del plan y del presupuesto.
+  function noUsoCat(id) {
+    const d = D(), c = d.categorias.find(x => x.id === id); if (!c) return;
+    c.borrado = true; c.editado = ahora();
+    const pres = { ...(d.ajustes.presupuestos || {}) }; delete pres[id]; d.ajustes.presupuestos = pres;
+    const pp = { ...(d.ajustes.planPropio || {}) }; delete pp[id]; d.ajustes.planPropio = pp;
+    guardar(T.catOcultadaPlan);
   }
   function aplicarPlan() {
     const p = CS.plan(D(), L.hoy());
@@ -179,6 +340,7 @@ window.Secciones = function (W) {
       <label class="campo">${T.nombre}<input name="nombre" maxlength="40" required value="${f ? esc(f.nombre) : ''}" placeholder="${T.fijoEj}"></label>
       <label class="campo monto-campo">${T.monto} (${sim(W.P())})<input name="monto" inputmode="decimal" autocomplete="off" value="${f ? aInput(f.monto) : ''}" placeholder="0.00"></label>
       <label class="campo">${T.categoria}<select name="cat">${opcionesCats('gasto', f ? f.categoriaId : 'c-servicios')}</select></label>
+      ${(D().ajustes.hogar || {}).activo ? `<p class="campo-et">${T.quienPagaFijo}</p>${segmento('quien', [['yo', '🙋 ' + T.duenoYo], ['pareja', '💑 ' + nombrePareja()], ['ambos', '🤝 ' + T.losDos]], (f && f.quien) || 'yo')}` : ''}
       <label class="campo">${T.pagarDesde}<select name="cuenta"><option value="">—</option>${opcionesCuentas(f && f.cuentaId, { tipos: usoCuentas })}</select></label>
       <label class="interruptor"><span>🤖 ${T.autoFijo}</span><input type="checkbox" name="auto" ${f && f.auto ? 'checked' : ''}><i></i></label>
       <p class="nota">${T.autoFijoTxt}</p>
@@ -189,9 +351,10 @@ window.Secciones = function (W) {
       fd => {
         const nombre = String(fd.get('nombre') || '').trim(); if (!nombre) return T.nombreFalta;
         const monto = L.parseMonto(fd.get('monto')); if (!monto) return T.montoInvalido;
-        const auto = fd.get('auto') === 'on'; if (auto && !fd.get('cuenta')) return T.autoSinCuenta;
+        const quien = ['pareja', 'ambos'].includes(fd.get('quien')) ? fd.get('quien') : undefined;
+        const auto = fd.get('auto') === 'on' && quien !== 'pareja'; if (auto && !fd.get('cuenta')) return T.autoSinCuenta;
         const datos = { nombre, monto, categoriaId: fd.get('cat'), icono: cat(fd.get('cat')).icono, cuentaId: fd.get('cuenta') || null, rec: leerRec(fd), avisarDias: Number(fd.get('avisar')) || 7, pausado: fd.get('pausado') === 'on', editado: ahora(),
-          auto, autoDesde: auto ? (f && f.auto && f.autoDesde) || L.hoy() : undefined }; // solo desde hoy: nunca anota pagos viejos
+          auto, autoDesde: auto ? (f && f.auto && f.autoDesde) || L.hoy() : undefined, quien }; // solo desde hoy: nunca anota pagos viejos
         if (f) Object.assign(f, datos); else nuevo('fijos', datos);
         guardar(T.guardado);
       });
@@ -224,7 +387,7 @@ window.Secciones = function (W) {
     return `<button class="pildora oscura ancho" data-accion="nomina-nueva">${ico('mas')} ${T.nuevaNomina}</button>
       ${ns.map(n => {
         const r = PL.nominaNeto(n, D().ajustes.pais), prox = L.proximaFecha(n.rec, L.hoy());
-        return `<section class="tarjeta nomina"><button class="fila sin-borde" data-accion="nomina-editar" data-id="${esc(n.id)}"><span class="ico">💼</span>
+        return `<section class="tarjeta nomina"><button class="fila sin-borde" data-accion="nomina-editar" data-id="${esc(n.id)}"><span class="ico">${n.dueno === 'pareja' ? '💑' : '💼'}</span>
           <span class="txt"><b>${esc(n.nombre)}</b><small>${textoRec(n.rec)}${prox ? ' · ' + T.proximo + ' ' + fechaCorta(prox) : ''}</small></span></button>
           <div class="desglose"><div><small>${T.bruto}</small><b>${din(r.bruto)}</b></div>${r.filas.map(x => `<div><small>${esc(x.nombre)}</small><b class="neg">−${din(x.monto)}</b></div>`).join('')}
           <div class="total"><small>${T.neto}</small><b class="pos">${din(r.neto)}</b></div></div></section>`;
@@ -237,6 +400,7 @@ window.Secciones = function (W) {
       <select name="dt${i}" aria-label="${T.tipo}"><option value="monto">${sim(W.P())}</option><option value="pct" ${x && x.pct ? 'selected' : ''}>%</option></select></div>`;
     const fm = abrirHoja(`<h2>${n ? T.editarNomina : T.nuevaNomina}</h2>
       <label class="campo">${T.nombreTrabajo}<input name="nombre" maxlength="40" required value="${n ? esc(n.nombre) : ''}"></label>
+      ${segmento('dueno', [['yo', '🙋 ' + T.duenoYo], ['pareja', '💑 ' + (esc((D().ajustes.hogar || {}).pareja) || T.duenoPareja)]], n && n.dueno === 'pareja' ? 'pareja' : 'yo')}
       <label class="campo monto-campo">${T.brutoPorPago} (${sim(W.P())})<input name="bruto" inputmode="decimal" autocomplete="off" value="${n ? aInput(n.bruto) : ''}" placeholder="0.00"></label>
       <label class="campo">${T.caeEn}<select name="cuenta">${opcionesCuentas(n && n.cuentaId, { tipos: ['diaria', 'ahorro'] })}</select></label>
       ${camposRec(n ? n.rec : { frec: 'quincenal', dias: [15, 30] }, ['mensual', 'quincenal', 'semanal', 'cada'])}
@@ -249,8 +413,9 @@ window.Secciones = function (W) {
       fd => {
         const nombre = String(fd.get('nombre') || '').trim(); if (!nombre) return T.nombreFalta;
         const datos = leer(fd); if (!datos) return T.montoInvalido;
-        if (!fd.get('cuenta')) return T.creaCuentaPrimero;
-        Object.assign(datos, { nombre, cuentaId: fd.get('cuenta'), editado: ahora() });
+        const dueno = fd.get('dueno') === 'pareja' ? 'pareja' : 'yo';
+        if (!fd.get('cuenta') && dueno === 'yo') return T.creaCuentaPrimero; // la de la pareja no cae en mis cuentas
+        Object.assign(datos, { nombre, dueno, cuentaId: fd.get('cuenta') || null, editado: ahora() });
         if (n) Object.assign(n, datos); else nuevo('nominas', datos);
         guardar(T.guardado);
       });
@@ -326,7 +491,8 @@ window.Secciones = function (W) {
       <label class="campo">${T.paraCuando}<input type="date" name="fecha" value="${m && m.fecha || ''}"></label>
       <label class="campo">${T.reto}<select name="reto">${Object.entries(T.retos).map(([k, v]) => `<option value="${k}" ${(m && m.reto || '') === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
       <label class="campo">${T.dondeAhorras}<select name="cuenta"><option value="">${T.crearCuentaMeta}</option>${ahorros.map(c => `<option value="${esc(c.id)}" ${m && m.cuentaId === c.id ? 'selected' : ''}>${esc(c.nombre)} (${sim(c.moneda)})</option>`).join('')}</select></label>
-      ${m ? `<button type="button" class="pildora peligro ancho" data-borrar>${T.borrar}</button>` : ''}`,
+      ${m ? `<button type="button" class="pildora peligro ancho" data-borrar>${T.borrar}</button>` : ''}
+      ${(D().ajustes.hogar || {}).activo ? `<label class="interruptor"><span>🏡 ${T.metaDelHogar}</span><input type="checkbox" name="hogar" ${(m && m.hogar) || (prefill && prefill.hogar) ? 'checked' : ''}><i></i></label>` : ''}`,
       fd => {
         const nombre = String(fd.get('nombre') || '').trim(); if (!nombre) return T.nombreFalta;
         const objetivo = L.parseMonto(fd.get('objetivo')); if (!objetivo) return T.montoInvalido;
@@ -336,7 +502,7 @@ window.Secciones = function (W) {
           D().cuentas.push({ id: cuentaId, nombre, moneda: W.P(), icono: '🐷', tipo: 'ahorro', privada: false, creado: t, editado: t, borrado: false });
           nuevoMov({ tipo: 'saldo', cuentaId, monto: 0, fecha: L.hoy() });
         }
-        const datos = { nombre, icono: String(fd.get('icono') || '🎯').trim() || '🎯', objetivo, fecha: fd.get('fecha') || null, cuentaId, reto: fd.get('reto') || undefined, editado: ahora() };
+        const datos = { nombre, icono: String(fd.get('icono') || '🎯').trim() || '🎯', objetivo, fecha: fd.get('fecha') || null, cuentaId, reto: fd.get('reto') || undefined, hogar: fd.get('hogar') === 'on' || undefined, editado: ahora() };
         if (m) Object.assign(m, datos); else nuevo('metas', datos);
         guardar(T.guardado);
       });
@@ -708,6 +874,8 @@ window.Secciones = function (W) {
   }
   function alPintar(t) {
     if (t === 'planes' && sub === 'plan') return conectarPlan();
+    if (t === 'planes' && sub === 'deudas') return conectarDeudas();
+    if (t === 'planes' && sub === 'hogar') return conectarHogar();
   if (t !== 'calculadora') return;
     const c = $('#calc');
     const ver = () => c.querySelectorAll('[data-m]').forEach(e => { e.hidden = !e.dataset.m.split(' ').includes(calc.modo); });
@@ -749,6 +917,11 @@ window.Secciones = function (W) {
       'plan-sub': () => { sub = el.dataset.sub; W.pintar(); },
       'plan-regla': () => { D().ajustes.regla = el.dataset.regla; aporteProy = null; guardar(); },
       'plan-aplicar': aplicarPlan,
+      'hogar-gasto': hojaGastoHogar,
+      'hogar-gasto-borrar': () => { const g = buscar('hogarGastos', id); if (!g || !confirm(T.confirmarBorrar)) return; const t = ahora(); g.borrado = true; g.editado = t;
+        const m = g.movId && D().movimientos.find(x => x.id === g.movId); if (m) { m.borrado = true; m.editado = t; } guardar(T.borrado); },
+      'hogar-saldar': () => { const x = CS.hogar(D(), L.hoy()); if (Math.abs(x.balance) < 100 || !confirm(T.saldarConfirma)) return;
+        nuevo('hogarGastos', { tipo: 'saldar', fecha: L.hoy(), yo: x.balance < 0 ? -x.balance : 0, pareja: x.balance > 0 ? x.balance : 0 }); guardar(T.hogarSaldado); },
       'fijo-nuevo': () => hojaFijo(), 'fijo-editar': () => hojaFijo(buscar('fijos', id)),
       'nomina-nueva': () => hojaNomina(), 'nomina-editar': () => hojaNomina(buscar('nominas', id)),
       'meta-nueva': () => hojaMeta(),
@@ -774,5 +947,5 @@ window.Secciones = function (W) {
     W.irTab('planes');
   }
 
-  return { vPlanes, vCalculadora, alPintar, accion, pendiente, hojaTabla, abrirSamDeCuenta, vLogros, irA: s => { if (SUBS.includes(s)) sub = s; } };
+  return { vPlanes, vCalculadora, alPintar, accion, pendiente, hojaTabla, abrirSamDeCuenta, vLogros, subActual: () => sub, irA: s => { if (SUBS.includes(s)) sub = s; } };
 };

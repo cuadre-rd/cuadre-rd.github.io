@@ -31,7 +31,8 @@
   // Ingreso mensual: el que escribió el usuario, si no la nómina (neto al mes), si no el promedio de ingresos.
   function ingresoMensual(d, fechaHoy) {
     if (d.ajustes.ingresoPlan > 0) return { monto: d.ajustes.ingresoPlan, origen: 'manual' };
-    const ns = (d.nominas || []).filter(n => !n.borrado);
+    // v24: la nómina de la pareja solo cuenta con el Hogar activo (entonces el plan es del hogar).
+    const hogar = d.ajustes.hogar && d.ajustes.hogar.activo, ns = (d.nominas || []).filter(n => !n.borrado && (hogar || n.dueno !== 'pareja'));
     if (ns.length) return { monto: Math.round(ns.reduce((s, n) => s + PL.nominaNeto(n, d.ajustes.pais).neto * L.vecesAlMes(n.rec), 0)), origen: 'nomina' };
     return { monto: L.promedios(d, fechaHoy).ingresos, origen: 'promedio' };
   }
@@ -63,11 +64,21 @@
     const real = Object.keys(pesos).reduce((s, k) => s + (gastos[k] || 0), 0);
     const w = {};
     for (const k of Object.keys(pesos)) w[k] = real > 0 ? 0.5 * pesos[k] + 0.5 * ((gastos[k] || 0) / real) : pesos[k];
-    const tot = sumaVals(w), out = {};
+    const tot = sumaVals(w) || 1, out = {};
     for (const k of Object.keys(w)) out[k] = Math.round((monto * w[k]) / tot);
     return out;
   }
 
+  // v24: pagos fijos activos por categoría principal, al mes y en moneda principal.
+  function fijosPorCat(d) {
+    const out = {};
+    for (const f of (d.fijos || []).filter(f => !f.borrado && !f.pausado && f.categoriaId)) {
+      const c = f.cuentaId && d.cuentas.find(x => x.id === f.cuentaId), id = L.padreDe(d, f.categoriaId) || f.categoriaId;
+      const v = L.aPrincipal(d, f.monto || 0, c ? c.moneda : d.ajustes.monedaPrincipal);
+      out[id] = (out[id] || 0) + Math.round((v == null ? f.monto || 0 : v) * L.vecesAlMes(f.rec));
+    }
+    return out;
+  }
   // El plan completo del mes.
   function plan(d, fechaHoy) {
     const h = fechaHoy || L.hoy(), ing = ingresoMensual(d, h), gastos = gastoPromedio(d, h);
@@ -77,17 +88,20 @@
     const grupos = { necesidades: Math.round((I * n) / 100), deseos: Math.round((I * w) / 100), ahorro: Math.round((I * s) / 100) };
     // Categorías propias del usuario (con grupo) también reciben su parte.
     const propias = gr => Object.fromEntries(d.categorias.filter(c => !c.borrado && !c.padre && c.tipo === 'gasto' && c.grupo === gr && !NECESIDADES[c.id] && !DESEOS[c.id]).map(c => [c.id, 0.05]));
-    const cats = { ...repartir(grupos.necesidades, { ...NECESIDADES, ...propias('necesidades') }, gastos), ...repartir(grupos.deseos, { ...DESEOS, ...propias('deseos') }, gastos) };
+    // v24: lo que la persona no usa (categoría oculta o borrada) sale del reparto y su parte va a las demás.
+    const usa = pesos => Object.fromEntries(Object.entries(pesos).filter(([id]) => { const c = d.categorias.find(x => x.id === id); return c && !c.borrado && !c.oculta; }));
+    const propio = d.ajustes.planPropio || {}, fijos = fijosPorCat(d), gastosR = { ...gastos, ...fijos, ...propio }; // v24: lo real = lo que puso la persona, si no sus pagos fijos, si no lo anotado
+    const cats = { ...repartir(grupos.necesidades, usa({ ...NECESIDADES, ...propias('necesidades') }), gastosR), ...repartir(grupos.deseos, usa({ ...DESEOS, ...propias('deseos') }), gastosR) };
     // Tope de vivienda: lo que sobra pasa al resto de necesidades.
     const tope = Math.round((I * VIVIENDA[costoVida(d)]) / 100);
     if (cats['c-casa'] > tope) {
       const sobra = cats['c-casa'] - tope; cats['c-casa'] = tope;
-      const otras = Object.keys(NECESIDADES).filter(k => k !== 'c-casa'), base = otras.reduce((t, k) => t + cats[k], 0) || 1;
+      const otras = Object.keys(NECESIDADES).filter(k => k !== 'c-casa' && k in cats), base = otras.reduce((t, k) => t + cats[k], 0) || 1;
       for (const k of otras) cats[k] += Math.round((sobra * cats[k]) / base);
     }
     const filas = Object.entries(cats).map(([id, sugerido]) => {
-      const real = gastos[id] || 0;
-      return { id, grupo: grupoDe(d, id) || 'deseos', sugerido, real, estado: !sugerido ? 'ok' : real > sugerido * 1.1 ? 'pasado' : real > sugerido * 0.9 ? 'justo' : 'ok' };
+      const real = propio[id] > 0 ? propio[id] : Math.max(fijos[id] || 0, gastos[id] || 0);
+      return { id, grupo: grupoDe(d, id) || 'deseos', sugerido, propio: propio[id] > 0, fijo: !(propio[id] > 0) && fijos[id] > 0 && fijos[id] >= (gastos[id] || 0), real, estado: !sugerido ? 'ok' : real > sugerido * 1.1 ? 'pasado' : real > sugerido * 0.9 ? 'justo' : 'ok' };
     });
     // Ahorro: primero el fondo de emergencia, después deudas caras, después metas e inversión.
     const fondo = fondoEmergencia(d, h, grupos.necesidades);
@@ -199,7 +213,110 @@
       limite: lim, usado, gustos, puntos, nivel, partes: { ahorro: ptsAhorro, presupuesto: ptsPres, tendencia: ptsTend }, consejos, serie };
   }
 
-  const api = { grupoDe, PERIODOS, saludPeriodo, REGLAS, NECESIDADES, DESEOS, CIUDADES, VIVIENDA, ingresoMensual, gastoPromedio, costoVida, recomendarRegla, plan, fondoEmergencia, proyeccionAhorro, LOGROS, logros };
+  // ---------- v24: asesor de tarjetas, ¿me alcanza el sueldo?, plan para salir de deudas y recortes ----------
+  // Orientación general con los datos del propio usuario; todo se calcula en el teléfono. No es asesoría financiera.
+  const vivas = a => (a || []).filter(x => !x.borrado);
+  const tarjetasCC = d => vivas(d.cuentas).filter(c => c.tipo === 'credito' && !c.castigado && !c.parDe);
+  const aP = (d, v, mon) => { const x = L.aPrincipal(d, v, mon); return x == null ? v : x; }; // sin tasa guardada: se toma tal cual
+  // Una compra hecha en la fecha h entra en el próximo corte (el mismo día del corte cuenta) y se paga en el día límite siguiente.
+  function compraHoy(c, h) {
+    if (!c.diaCorte || !c.diaPago) return null;
+    const corte = L.proximaFecha({ frec: 'mensual', dia: c.diaCorte }, h);
+    const pago = corte && L.proximaFecha({ frec: 'mensual', dia: c.diaPago }, L.sumarDias(corte, 1));
+    return pago ? { corte, pago, dias: L.diasEntre(h, pago) } : null;
+  }
+  // Tarjetas de mejor a peor para comprar hoy: que alcance el disponible y no pase del 90 % del límite, más días para pagar y menos uso.
+  function rankingTarjetas(d, h, monto) {
+    monto = monto > 0 ? monto : 0;
+    return tarjetasCC(d).map(c => {
+      const ch = compraHoy(c, h); if (!ch) return null;
+      const deuda = Math.max(0, -L.saldoCuenta(d, c.id)), disp = c.limite ? c.limite - deuda : null;
+      const uso = c.limite ? (deuda + monto) / c.limite : 0;
+      return { c, ...ch, deuda, disp, uso, ok: (disp == null || monto <= disp) && uso <= 0.9 };
+    }).filter(Boolean).sort((a, b) => (b.ok - a.ok) || (b.dias - a.dias) || (a.uso - b.uso));
+  }
+  // Deudas en moneda principal: tarjetas (tasa anual propia o 60 % supuesta; mínimo 5 % o RD$1,000) y préstamos con su cuota.
+  function deudas(d) {
+    const out = [], piso = d.ajustes.monedaPrincipal === 'DOP' ? 100000 : 2500; // pago mínimo de referencia: RD$1,000 o 25 en otra moneda
+    for (const c of vivas(d.cuentas).filter(c => c.tipo === 'credito' && !c.castigado)) {
+      const saldo = aP(d, -L.saldoCuenta(d, c.id), c.moneda); if (saldo <= 0) continue;
+      const tasa = c.tasa > 0 ? c.tasa : 60;
+      out.push({ id: c.id, nombre: c.banco || c.nombre, tipo: 'tarjeta', saldo, tasaAnual: tasa, supuesta: !(c.tasa > 0), tasaMes: tasa / 1200, minimo: Math.min(saldo, Math.max(Math.round(saldo * 0.05), piso)) });
+    }
+    for (const c of vivas(d.cuentas).filter(c => c.tipo === 'deuda' && !c.castigado)) {
+      const saldo = aP(d, -L.saldoCuenta(d, c.id), c.moneda); if (saldo <= 0) continue;
+      const pl = c.plan, sig = pl ? PL.siguienteCuota(d, c) : null;
+      const tasaMes = pl ? PR.tasaPorCuota(Number(pl.tasa) || 0, pl.periodoTasa, 'mensual') : 0;
+      const cuotaMes = sig ? Math.round(aP(d, sig.fila.cuota, c.moneda) * (PR.POR_ANIO[pl.frecuencia] || 12) / 12) : 0;
+      out.push({ id: c.id, nombre: c.nombre, tipo: 'prestamo', saldo, tasaAnual: Math.round(tasaMes * 1200 * 10) / 10, supuesta: !pl, tasaMes, minimo: Math.min(saldo, cuotaMes || Math.max(Math.round(saldo * 0.05), piso)) });
+    }
+    return out;
+  }
+  // Simulación mes a mes. avalancha: el extra va a la de interés más alto; bola: a la más pequeña.
+  // soloMinimos: cada deuda paga solo su mínimo (para comparar cuánto se ahorra con el plan).
+  function planDeudas(lista, pago, metodo, soloMinimos) {
+    const ds = lista.map(x => ({ ...x })), minTot = ds.reduce((s, x) => s + x.minimo, 0);
+    if (!ds.length) return { meses: 0, interes: 0, orden: [], minTot: 0, falta: 0 };
+    if (!soloMinimos && pago < minTot) return { meses: null, interes: null, orden: [], minTot, falta: minTot - pago };
+    let mes = 0, interes = 0; const orden = [];
+    const prioridad = (a, b) => (metodo === 'bola' ? a.saldo - b.saldo || b.tasaMes - a.tasaMes : b.tasaMes - a.tasaMes || a.saldo - b.saldo);
+    while (ds.some(x => x.saldo > 0) && mes < 600) {
+      mes++;
+      for (const x of ds) if (x.saldo > 0) { const i = Math.round(x.saldo * x.tasaMes); x.saldo += i; interes += i; }
+      let disp = soloMinimos ? Infinity : pago;
+      for (const x of ds) if (x.saldo > 0) { const p = Math.min(x.minimo, x.saldo, disp); x.saldo -= p; disp -= p; }
+      if (!soloMinimos) for (const x of ds.filter(x => x.saldo > 0).sort(prioridad)) { const p = Math.min(x.saldo, disp); x.saldo -= p; disp -= p; if (!disp) break; }
+      for (const x of ds) if (x.saldo <= 0 && !orden.some(o => o.id === x.id)) orden.push({ id: x.id, nombre: x.nombre, mes });
+    }
+    return { meses: mes >= 600 ? null : mes, interes, orden, minTot, falta: 0 };
+  }
+  // A quién va el extra este mes según el método (la primera deuda viva en el orden de prioridad).
+  const objetivoDeudas = (lista, metodo) => lista.slice().sort((a, b) => (metodo === 'bola' ? a.saldo - b.saldo : b.tasaMes - a.tasaMes))[0] || null;
+  // ¿Me alcanza el sueldo? Ingreso del mes menos pagos fijos, cuotas de préstamos y lo que se debe en tarjetas.
+  function alcanza(d, h) {
+    const ing = ingresoMensual(d, h).monto;
+    const fijos = vivas(d.fijos).filter(f => !f.pausado).reduce((s, f) => {
+      const c = f.cuentaId && d.cuentas.find(x => x.id === f.cuentaId);
+      return s + Math.round(aP(d, f.monto || 0, c ? c.moneda : d.ajustes.monedaPrincipal) * L.vecesAlMes(f.rec));
+    }, 0);
+    const ds = deudas(d), cuotas = ds.filter(x => x.tipo === 'prestamo').reduce((s, x) => s + x.minimo, 0);
+    const tarjetas = ds.filter(x => x.tipo === 'tarjeta').reduce((s, x) => s + x.saldo, 0);
+    const queda = ing - fijos - cuotas - tarjetas;
+    return { ingreso: ing, fijos, cuotas, tarjetas, queda, nivel: !ing ? null : queda < 0 ? 'rojo' : queda < ing * 0.2 ? 'amarillo' : 'verde' };
+  }
+  // Dónde recortar: categorías que pasan lo sugerido por Mi plan (las 3 más grandes) y pagos fijos que son gustos.
+  function recortes(d, h) {
+    const p = plan(d, h);
+    const cats = p.filas.filter(f => f.estado === 'pasado' && f.sugerido > 0).map(f => ({ id: f.id, grupo: f.grupo, propio: f.propio, real: f.real, sugerido: f.sugerido, ahorro: f.real - f.sugerido }))
+      .sort((a, b) => b.ahorro - a.ahorro).slice(0, 3);
+    const gustos = vivas(d.fijos).filter(f => !f.pausado && grupoDe(d, f.categoriaId) === 'deseos');
+    const gustosMes = gustos.reduce((s, f) => s + Math.round((f.monto || 0) * L.vecesAlMes(f.rec)), 0);
+    return { cats, gustos: gustos.length, gustosMes, total: cats.reduce((s, x) => s + x.ahorro, 0) };
+  }
+
+  // v24: Hogar: sueldo de cada uno, total y aporte justo a los pagos fijos (proporcional al sueldo o mitad y mitad).
+  function hogar(d, h) {
+    const ns = vivas(d.nominas), neto = n => Math.round(PL.nominaNeto(n, d.ajustes.pais).neto * L.vecesAlMes(n.rec));
+    const yo = ns.filter(n => n.dueno !== 'pareja').reduce((s, n) => s + neto(n), 0), pareja = ns.filter(n => n.dueno === 'pareja').reduce((s, n) => s + neto(n), 0);
+    const total = yo + pareja, mitad = (d.ajustes.hogar || {}).reparto === 'mitad';
+    const pctYo = total ? (mitad ? 0.5 : yo / total) : 0.5, fijos = Object.values(fijosPorCat(d)).reduce((s, v) => s + v, 0);
+    // Lo que puso cada uno este mes: pagos fijos según quién los paga (los de «los dos» se reparten) + gastos compartidos + lo saldado.
+    const mes = (h || L.hoy()).slice(0, 7), porFijo = { yo: 0, pareja: 0, ambos: 0 };
+    for (const f of vivas(d.fijos).filter(f => !f.pausado)) {
+      const c = f.cuentaId && d.cuentas.find(x => x.id === f.cuentaId), v = L.aPrincipal(d, f.monto || 0, c ? c.moneda : d.ajustes.monedaPrincipal);
+      porFijo[f.quien === 'pareja' ? 'pareja' : f.quien === 'ambos' ? 'ambos' : 'yo'] += Math.round((v == null ? f.monto || 0 : v) * L.vecesAlMes(f.rec));
+    }
+    const gs = vivas(d.hogarGastos).filter(g => (g.fecha || '').startsWith(mes)), comp = gs.filter(g => g.tipo !== 'saldar');
+    const compYo = comp.reduce((s, g) => s + (g.yo || 0), 0), compPareja = comp.reduce((s, g) => s + (g.pareja || 0), 0);
+    const ambosYo = Math.round(porFijo.ambos * pctYo);
+    const gastoHogar = porFijo.yo + porFijo.pareja + porFijo.ambos + compYo + compPareja;
+    const pusoYo = porFijo.yo + ambosYo + compYo, pusoPareja = porFijo.pareja + (porFijo.ambos - ambosYo) + compPareja;
+    const saldado = gs.filter(g => g.tipo === 'saldar').reduce((s, g) => s + (g.yo || 0) - (g.pareja || 0), 0); // yo le pagué (+) o me pagó (−)
+    const tocaYo = Math.round(gastoHogar * pctYo), balance = pusoYo + saldado - tocaYo; // > 0: la pareja me debe; < 0: le debo
+    return { yo, pareja, total, pctYo, pctPareja: 1 - pctYo, fijos, aporteYo: Math.round(fijos * pctYo), aportePareja: fijos - Math.round(fijos * pctYo), mitad,
+      mes, porFijo, compYo, compPareja, gastoHogar, pusoYo, pusoPareja, tocaYo, tocaPareja: gastoHogar - tocaYo, saldado, balance, gastos: comp };
+  }
+  const api = { hogar, compraHoy, rankingTarjetas, deudas, planDeudas, objetivoDeudas, alcanza, recortes, grupoDe, PERIODOS, saludPeriodo, REGLAS, NECESIDADES, DESEOS, CIUDADES, VIVIENDA, ingresoMensual, gastoPromedio, costoVida, recomendarRegla, plan, fondoEmergencia, proyeccionAhorro, LOGROS, logros };
   g.Consejos = api;
   if (typeof module !== 'undefined') module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -73,7 +73,7 @@ window.Portada = (function () {
     const admin = !!sesion() && leer(ADMIN) === '1', dias = Math.ceil((m.vence - ahora) / DIA);
     return { ...m, dias, admin, vencida: dias <= 0 && !admin };
   }
-  const olvidarCuenta = () => { poner(SESION, null); poner(MEMB, null); poner(ADMIN, null); };
+  const olvidarCuenta = () => { poner(SESION, null); poner(MEMB, null); poner(ADMIN, null); if (window.Sincro) window.Sincro.olvidar(); };
   const errorTxt = e => (/invalid login|invalid_grant|credentials/i.test(e.message) ? T.pErrorClave : /already|registered|exists/i.test(e.message) ? T.pYaExiste
     : /fetch|network|failed/i.test(e.message) ? T.pSinInternet : T.pErrorGeneral);
   const guardarSesion = j => poner(SESION, JSON.stringify({ correo: j.user && j.user.email, nombre: j.user && j.user.user_metadata && j.user.user_metadata.nombre,
@@ -88,7 +88,7 @@ window.Portada = (function () {
     ojo: svg('<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>'), listo: svg('<path d="m5 12.5 4.5 4.5L19 7.5"/>') };
   const fondo = '<div class="p-fondo" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>';
   function portadaHtml() {
-    const fx = T.pFunciones.map(([i, t, d]) => `<li class="p-caja"><span class="p-ico">${i}</span><b>${t}</b><small>${d}</small></li>`).join('');
+    const fx = T.pFunciones.map(([i, t, d, nuevo]) => `<li class="p-caja"><span class="p-ico">${i}</span><b>${t}${nuevo ? ` <span class="p-nuevo">${T.pNuevo}</span>` : ''}</b><small>${d}</small></li>`).join('');
     const pasos = T.pPasos.map((p, i) => `<li><span class="p-num">${i + 1}</span><span>${p}</span></li>`).join('');
     return `${fondo}
       <header class="p-barra"><span class="p-marca"><span class="p-logo">${logo}</span>${T.app}</span><button class="p-enlace" data-p="login">${T.pEntrar}</button></header>
@@ -161,11 +161,11 @@ window.Portada = (function () {
     try {
       if (vista === 'registro') {
         const j = await auth('signup', { email: d.correo, password: d.clave, data: { nombre: d.nombre } });
-        if (j.access_token) { guardarSesion(j); entrar(); } else mensaje('sobre', T.pConfirmaT, T.pConfirma(d.correo));
+        if (j.access_token) { guardarSesion(j); await activarSincro(d.clave); entrar(); } else mensaje('sobre', T.pConfirmaT, T.pConfirma(d.correo));
       } else if (vista === 'recuperar') {
         await auth('recover', { email: d.correo }); mensaje('sobre', T.pRecuperarT, T.pRecuperarListo(d.correo));
       } else {
-        guardarSesion(await auth('token?grant_type=password', { email: d.correo, password: d.clave })); await cargarMembresia(); entrar();
+        guardarSesion(await auth('token?grant_type=password', { email: d.correo, password: d.clave })); await cargarMembresia(); await activarSincro(d.clave); entrar();
       }
     } catch (e) { err.textContent = errorTxt(e); }
     finally { b.disabled = false; b.classList.remove('cargando'); }
@@ -174,6 +174,8 @@ window.Portada = (function () {
     const f = $('#portada form');
     f.innerHTML = `<span class="p-avatar listo">${IC[icono] || icono}</span><h1>${titulo}</h1><p class="p-sub">${esc(texto)}</p><button type="button" class="p-boton azul ancho" data-p="login">${T.pEntrar}</button>`;
   }
+  // v24: al entrar con la contraseña se activa la sincronización cifrada (la llave sale de la contraseña y se queda en este dispositivo).
+  async function activarSincro(clave) { try { if (window.Sincro) await window.Sincro.activar(clave); } catch (e) { console.warn('sincro', e && e.message); } }
   function entrar() { poner(ENTRO, '1'); cerrar(); alEntrar(); }
 
   document.addEventListener('click', ev => {
@@ -186,7 +188,7 @@ window.Portada = (function () {
   });
 
   return {
-    debeMostrar, sesion, hayCuentas, borrarCuenta,
+    debeMostrar, sesion, hayCuentas, borrarCuenta, token: tokenVigente,
     mostrar(vista, { despues } = {}) { if (despues) alEntrar = despues; pintar(vista || 'portada'); },
     salir: olvidarCuenta, cargarMembresia, membresia,
     adminCuentas: () => rest('rpc/admin_cuentas', { metodo: 'POST', cuerpo: {} }),

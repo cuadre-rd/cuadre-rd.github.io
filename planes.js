@@ -41,13 +41,13 @@
     const h = fechaHoy || L.hoy(), out = [];
     const desdeDe = x => (x.creado || h).slice(0, 10) > L.sumarDias(h, -62) ? (x.creado || h).slice(0, 10) : L.sumarDias(h, -62);
     for (const f of vivos(d.fijos)) {
-      if (f.pausado) continue;
+      if (f.pausado || f.quien === 'pareja') continue; // v24: lo que paga la pareja no sale de mis cuentas
       const ya = hechos(d, 'fijo', f.id), omit = new Set(f.omitidos || []);
       for (const fecha of L.fechasEntre(f.rec, desdeDe(f), L.sumarDias(h, adelante == null ? (f.avisarDias || 7) : adelante))) {
         if (!ya.has(fecha) && !omit.has(fecha)) out.push({ tipo: 'fijo', id: f.id, fecha, dias: L.diasEntre(h, fecha), monto: f.monto, nombre: f.nombre, icono: f.icono });
       }
     }
-    for (const n of vivos(d.nominas)) {
+    for (const n of vivos(d.nominas).filter(n => n.dueno !== 'pareja')) {
       const ya = hechos(d, 'nomina', n.id), omit = new Set(n.omitidos || []);
       for (const fecha of L.fechasEntre(n.rec, desdeDe(n), h)) {
         if (!ya.has(fecha) && !omit.has(fecha)) out.push({ tipo: 'nomina', id: n.id, fecha, dias: L.diasEntre(h, fecha), monto: nominaNeto(n, d.ajustes.pais).neto, nombre: n.nombre, icono: '💼' });
@@ -219,7 +219,7 @@
         if (t > ahoraMs) out.push({ at: t, titulo: T.avisoTitulo(p), cuerpo: T.avisoCuerpo(p, k) });
       }
     }
-    for (const n of vivos(d.nominas)) {
+    for (const n of vivos(d.nominas).filter(n => n.dueno !== 'pareja')) { // v24: la de la pareja no cae en mis cuentas
       for (const fecha of L.fechasEntre(n.rec, h, L.sumarDias(h, 31))) {
         for (const hh of [hora, 18]) { const t = a(fecha, hh); if (t > ahoraMs) out.push({ at: t, titulo: T.avisoNominaTitulo, cuerpo: T.avisoNomina(n.nombre) }); }
       }
@@ -228,12 +228,29 @@
     const op = d.ajustes.avisosAnimo || {}, usados = new Set(), animo = (fecha, hh, titulo, cuerpo) => {
       const t = a(fecha, hh); if (t > ahoraMs && !usados.has(fecha)) { usados.add(fecha); out.push({ at: t, titulo, cuerpo }); }
     };
+    const CS = g.Consejos || (typeof require !== 'undefined' ? require('./consejos.js') : null); // se carga después; aquí ya existe
+    // v24: plan de deudas: el día de cobro dice a cuál abonar y el día 1 cuánto falta.
+    const ds = op.deudas !== false && d.ajustes.planDeudas && CS ? CS.deudas(d) : [];
+    if (ds.length) {
+      const pd = d.ajustes.planDeudas, obj = CS.objetivoDeudas(ds, pd.metodo), r = CS.planDeudas(ds, pd.pago || 0, pd.metodo);
+      for (const n of vivos(d.nominas).filter(n => n.dueno !== 'pareja')) for (const fecha of L.fechasEntre(n.rec, h, L.sumarDias(h, 31))) animo(fecha, 13, T.animoNominaT, T.animoNominaDeuda(obj.nombre));
+      if (r.meses) animo(L.sumarMeses(h.slice(0, 7), 1) + '-01', 12, T.animoDeudasT, T.animoDeudas(r.meses));
+    }
     if (op.ahorro !== false) {
-      for (const n of vivos(d.nominas)) for (const fecha of L.fechasEntre(n.rec, h, L.sumarDias(h, 31))) animo(fecha, 13, T.animoNominaT, T.animoNomina);
+      for (const n of vivos(d.nominas).filter(n => n.dueno !== 'pareja')) for (const fecha of L.fechasEntre(n.rec, h, L.sumarDias(h, 31))) animo(fecha, 13, T.animoNominaT, T.animoNomina);
       const ahorroCta = new Set(vivos(d.cuentas).filter(c => c.tipo === 'ahorro' || c.tipo === 'inversion').map(c => c.id));
       const mes = h.slice(0, 7), yaAhorro = (d.movimientos || []).some(m => !m.borrado && m.fecha.startsWith(mes) && ahorroCta.has(m.tipo === 'transferencia' ? m.cuentaDestinoId : m.tipo === 'ingreso' ? m.cuentaId : ''));
       if (!yaAhorro) animo(mes + '-20', 12, T.animoAhorroT, T.animoAhorro);
       animo(L.sumarMeses(mes, 1) + '-20', 12, T.animoAhorroT, T.animoAhorro);
+    }
+    // v24: el día después del corte es el mejor para usar esa tarjeta (si es la que más días da ese día).
+    if (op.tarjetas !== false && CS) {
+      for (const c of vivos(d.cuentas).filter(c => c.tipo === 'credito' && c.diaCorte && c.diaPago && !c.parDe && !c.castigado)) {
+        const dia = L.sumarDias(L.proximaFecha({ frec: 'mensual', dia: c.diaCorte }, L.sumarDias(h, -1)), 1);
+        const rk = CS.rankingTarjetas(d, dia), ch = CS.compraHoy(c, dia);
+        if (!ch || (rk.length > 1 && rk[0].c.id !== c.id)) continue;
+        const t = a(dia, hora); if (t > ahoraMs) out.push({ at: t, titulo: T.avisoTcT(c.banco || c.nombre), cuerpo: T.avisoTc(ch.dias, ch.pago) });
+      }
     }
     if (op.corte !== false) {
       for (const c of vivos(d.cuentas).filter(c => c.tipo === 'credito' && c.diaCorte && !c.parDe)) {

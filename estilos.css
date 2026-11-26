@@ -950,3 +950,86 @@ html, body { overflow-x: clip; }
 .panel-tc .cc-mini { flex: none; width: 46px; aspect-ratio: 1.586; border-radius: 8px; background: var(--cc-bg); background-size: cover; }
 .panel-tc .cc-pago:not(.rojo, .amb, .verde) { background: var(--sup2); }
 .mini-t { font-size: .9rem; color: var(--suave); margin: 14px 0 4px; font-weight: 650; }
+/* v24: asesor de tarjetas */
+.panel-tc .sub-fila { margin: 0; } .conviene { margin: 4px 0 6px; padding: 10px 12px; border-radius: 14px; background: var(--sup2); font-size: .9rem; line-height: 1.35; }
+.rk { display: flex; align-items: center; gap: 12px; padding: 10px 0; } .rk .txt { flex: 1; min-width: 0; } .rk .txt b, .rk .txt small { display: block; } .rk .txt small { color: var(--suave); }
+.rk-n { width: 30px; text-align: center; font-weight: 800; } .rk.no { opacity: .6; }
+.tc-hint { margin-top: -6px; }
+/* v24: ¿me alcanza?, recortes y plan de deudas */
+.cuenta-mes { list-style: none; padding: 0; margin: 8px 0; } .cuenta-mes li { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; font-variant-numeric: tabular-nums; }
+.cuenta-mes li b { overflow-wrap: anywhere; text-align: right; } .cuenta-mes .total { border-top: 1px solid var(--sep); margin-top: 4px; padding-top: 10px; font-size: 1.1rem; }
+.alcanza.verde .total b { color: var(--verde); } .alcanza.amarillo .total b { color: var(--amarillo); } .alcanza.rojo .total b { color: var(--rojo); }
+.deuda-fila { display: flex; align-items: center; gap: 10px; padding: 10px 0; } .deuda-fila .txt { flex: 1; min-width: 0; } .deuda-fila .txt b, .deuda-fila .txt small { display: block; } .deuda-fila .txt small { color: var(--suave); }
+.libre { text-align: center; padding: 14px; border-radius: 18px; background: var(--sup2); margin: 10px 0; } .libre small { display: block; color: var(--suave); } .libre b { display: block; font-size: 1.6rem; text-transform: capitalize; }
+.orden-deudas { padding-left: 22px; margin: 6px 0; } .orden-deudas li { padding: 4px 0; } .orden-deudas small { color: var(--suave); }
+.aviso-rojo { padding: 10px 12px; border-radius: 14px; background: rgb(255 69 58 / .12); }
+.novedades { padding-left: 0; list-style: none; display: grid; gap: 10px; margin: 10px 0; line-height: 1.4; }
+.novedades li { padding: 10px 12px; border-radius: 14px; background: var(--sup2); }
+.plan-cats li.tocable { cursor: pointer; } .plan-cats li.tocable:active { opacity: .7; }
+/* v24: Anotar: con una categoría elegida se esconden las demás */
+[data-chips] .otra-cat { display: none; }
+[data-chips].elegida > .chip:not(:has(input:checked)), [data-chips].elegida > [data-nueva-cat] { display: none; }
+[data-chips].elegida .otra-cat { display: inline-flex; }
+[data-chips].elegida > .chip:has(input:checked) { animation: cat-elegida .25s ease; }
+@keyframes cat-elegida { from { transform: scale(.92); opacity: .6; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { [data-chips].elegida > .chip:has(input:checked) { animation: none; } }
+.plan-cats li { flex-wrap: wrap; } .plan-edit { flex-basis: 100%; padding: 8px 0 2px; display: grid; gap: 6px; } .plan-edit .campo { margin: 0; }
+.pide-fijos p { margin: 0 0 10px; line-height: 1.4; }
+.pres-fila { display: flex; align-items: center; gap: 8px; } .pres-fila .campo { flex: 1; min-width: 0; }
+/* v24: ayuda */
+.ayuda-top b { font-size: 1.15rem; font-weight: 800; }
+.ayuda-btn { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; border: 0; padding: 0; margin-left: 4px; vertical-align: middle;
+  background: var(--lila, var(--sup2)); color: var(--acento); font: 800 .8rem/1 system-ui, sans-serif; cursor: pointer; }
+.h-ayuda { display: flex; align-items: center; gap: 6px; } .h-ayuda h2 { margin: 0; }
+.ayuda-tema { border-radius: 16px; background: var(--sup2); padding: 10px 14px; margin: 8px 0; }
+.ayuda-tema summary { font-weight: 700; cursor: pointer; } .ayuda-tema p { margin: 8px 0 0; line-height: 1.45; }
+.ayuda-ej { background: var(--sup-solida); border-radius: 12px; padding: 8px 10px; }
+.como-funciona { display: block; margin: 0 0 10px; font-size: .9rem; }
+.header-btns { gap: 8px; }
+.hg-fila { display: flex; align-items: center; gap: 8px; padding: 8px 0; } .hg-fila .txt { flex: 1; min-width: 0; } .hg-fila .txt b, .hg-fila .txt small { display: block; } .hg-fila .txt small { color: var(--suave); }
+.meta-hogar { display: grid; gap: 4px; padding: 8px 0; } .meta-hogar small { color: var(--suave); }
+.meta-hogar i { display: block; height: 6px; border-radius: 9px; background: linear-gradient(90deg, var(--verde) var(--p), var(--sup2) var(--p)); }
+.p-funciones { grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr)); }
+.p-nuevo { display: inline-block; font-size: .65rem; font-weight: 800; letter-spacing: .03em; padding: 2px 7px; border-radius: 99px; background: var(--n-azul); color: #fff; vertical-align: middle; }
+/* v24: vista de computadora: menú lateral, columnas tipo panel y formularios centrados.
+   Automática por el ancho de la pantalla; en Ajustes → Diseño se puede forzar «Teléfono» o «Computadora» (html[data-vista]). */
+.fab-txt { display: none; }
+@media (min-width: 1100px) {
+  :root:not([data-vista="movil"]) body { max-width: 1360px; padding: 24px 32px 40px calc(260px + 32px); }
+  :root:not([data-vista="movil"]) nav { left: max(16px, calc(50vw - 680px + 16px)); top: 24px; bottom: 24px; transform: none; width: 236px; }
+  :root:not([data-vista="movil"]) .barra { flex-direction: column; align-items: stretch; height: 100%; border-radius: 28px; padding: 14px 12px; gap: 6px; }
+  :root:not([data-vista="movil"]) .barra button { flex: none; flex-direction: row; justify-content: flex-start; gap: 12px; padding: 12px 14px; font-size: .95rem; border-radius: 16px; }
+  :root:not([data-vista="movil"]) .barra .fab { order: -1; width: auto; height: 52px; margin: 0 0 12px; border-radius: 16px; display: flex; justify-content: center; gap: 8px; }
+  :root:not([data-vista="movil"]) .barra .fab .ico-svg { width: 22px; height: 22px; }
+  :root:not([data-vista="movil"]) .fab-txt { display: inline; font-size: 1rem; font-weight: 700; }
+  :root:not([data-vista="movil"]) header { padding-top: 0; }
+  :root:not([data-vista="movil"]) #vista { columns: 2 420px; column-gap: 20px; }
+  :root:not([data-vista="movil"]) #vista > * { break-inside: avoid; }
+  :root:not([data-vista="movil"]) #vista > :is(.hero, .pestanas, .rapidas, .acciones-top, .como-funciona, .sub-fila, .guia, .instalar), :root:not([data-vista="movil"]) #vista > h2.sub { column-span: all; }
+  :root:not([data-vista="movil"]) #vista > h2.sub { break-after: avoid; }
+  :root:not([data-vista="movil"]) #vista > .hero { margin-bottom: 20px; }
+  :root:not([data-vista="movil"]) .rapidas { max-width: 720px; }
+  :root:not([data-vista="movil"]) dialog { margin: auto; border-radius: 28px; max-height: 88vh; padding-bottom: 18px; box-shadow: 0 30px 80px -20px rgb(0 0 0 / .45); }
+  :root:not([data-vista="movil"]) #hoja > form > .acciones { margin-bottom: -18px; padding-bottom: 14px; }
+  :root:not([data-vista="movil"]) .carrusel { margin: 0 0 14px; padding: 4px 0 10px; }
+}
+:root[data-vista="pc"] body { max-width: 1360px; padding: 24px 32px 40px calc(260px + 32px); }
+:root[data-vista="pc"] nav { left: max(16px, calc(50vw - 680px + 16px)); top: 24px; bottom: 24px; transform: none; width: 236px; }
+:root[data-vista="pc"] .barra { flex-direction: column; align-items: stretch; height: 100%; border-radius: 28px; padding: 14px 12px; gap: 6px; }
+:root[data-vista="pc"] .barra button { flex: none; flex-direction: row; justify-content: flex-start; gap: 12px; padding: 12px 14px; font-size: .95rem; border-radius: 16px; }
+:root[data-vista="pc"] .barra .fab { order: -1; width: auto; height: 52px; margin: 0 0 12px; border-radius: 16px; display: flex; justify-content: center; gap: 8px; }
+:root[data-vista="pc"] .barra .fab .ico-svg { width: 22px; height: 22px; }
+:root[data-vista="pc"] .fab-txt { display: inline; font-size: 1rem; font-weight: 700; }
+:root[data-vista="pc"] header { padding-top: 0; }
+:root[data-vista="pc"] #vista { columns: 2 420px; column-gap: 20px; }
+:root[data-vista="pc"] #vista > * { break-inside: avoid; }
+:root[data-vista="pc"] #vista > :is(.hero, .pestanas, .rapidas, .acciones-top, .como-funciona, .sub-fila, .guia, .instalar), :root[data-vista="pc"] #vista > h2.sub { column-span: all; }
+:root[data-vista="pc"] #vista > h2.sub { break-after: avoid; }
+:root[data-vista="pc"] #vista > .hero { margin-bottom: 20px; }
+:root[data-vista="pc"] .rapidas { max-width: 720px; }
+:root[data-vista="pc"] dialog { margin: auto; border-radius: 28px; max-height: 88vh; padding-bottom: 18px; box-shadow: 0 30px 80px -20px rgb(0 0 0 / .45); }
+:root[data-vista="pc"] #hoja > form > .acciones { margin-bottom: -18px; padding-bottom: 14px; }
+:root[data-vista="pc"] .carrusel { margin: 0 0 14px; padding: 4px 0 10px; }
+@media (min-width: 1600px) { :root:not([data-vista="movil"]) body { max-width: 1680px; } :root:not([data-vista="movil"]) nav { left: max(16px, calc(50vw - 840px + 16px)); } :root:not([data-vista="movil"]) #vista { columns: 3 420px; } }
+.arma-botones { display: flex; flex-wrap: wrap; gap: 8px; } .arma-botones .pildora { min-height: 42px; padding: 0 14px; font-size: .9rem; flex: 1 1 auto; }
+.plan-monto small { display: block; text-align: right; }

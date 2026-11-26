@@ -2,8 +2,8 @@
 // Las secciones Planes y Calculadora están en secciones.js (reciben el contexto W).
 (function () {
   'use strict';
-  const APP_VERSION = '23';
-  const L = window.Logica, T = window.T, G = window.Graficas, B = window.Boveda, PL = window.Planes, PR = window.Prestamos, S = window.Sistema;
+  const APP_VERSION = '24';
+  const L = window.Logica, T = window.T, G = window.Graficas, B = window.Boveda, PL = window.Planes, PR = window.Prestamos, S = window.Sistema, CS = window.Consejos;
   const $ = s => document.querySelector(s);
   // v23: en Chrome de Android la página se achica con el teclado (así Guardar queda visible). Safari no conoce la clave y la marca como error.
   if (/Android/i.test(navigator.userAgent)) { const vp = $('meta[name="viewport"]'); if (vp && !/interactive-widget/.test(vp.content)) vp.content += ', interactive-widget=resizes-content'; }
@@ -54,13 +54,15 @@
       const nuevosL = window.Consejos.logros(D).lista.filter(x => x.hecho && !yaL.includes(x.id)).map(x => x.id);
       if (nuevosL.length) { D.ajustes.logrosCelebrados = yaL.concat(nuevosL); msg = T.logroNuevo(T.logros[nuevosL[nuevosL.length - 1]].t); confeti(); }
       msg = revisarCelebraciones() || msg;
+      D.ajustesT = ahora(); // v24: para sincronizar, los ajustes del último dispositivo que guardó
       let aGuardar = D;
       if (D.boveda && sesion) {
         const { publico, privado } = L.dividir(D);
-        aGuardar = { ...publico, boveda: await B.sellar(sesion, privado) };
-        D.boveda = aGuardar.boveda;
+        aGuardar = { ...publico, boveda: await B.sellar(sesion, privado), bovedaT: ahora() };
+        D.boveda = aGuardar.boveda; D.bovedaT = aGuardar.bovedaT;
       }
       await DB.guardar(aGuardar);
+      programarSincro(3000);
       actualizarWidget();
       if (msg) aviso(msg);
       programarAvisos();
@@ -121,6 +123,13 @@
       if (a.presCelebrado !== undefined && cumplio && !silencio) { msg = T.presCumplido(mesCorto(mp)); celebrar('🏅', T.presCumplidoT, msg); }
       a.presCelebrado = mp;
     }
+    // v24: celebrar cada deuda saldada (tarjeta o préstamo que tenía balance y llegó a cero).
+    const conDeuda = CS.deudas(D).map(x => x.id);
+    if (a.deudasVivas && !msg) {
+      const id = a.deudasVivas.find(x => !conDeuda.includes(x) && D.cuentas.some(c => c.id === x && !c.borrado));
+      if (id && !silencio) { const c = cuenta(id); msg = T.deudaSaldada(c.banco || c.nombre); celebrar('🎉', T.deudaSaldadaT, msg); }
+    }
+    a.deudasVivas = conDeuda;
     return msg;
   }
   // Montos que se achican solos para no cortarse (nunca menos de 12 px).
@@ -486,7 +495,9 @@
     const h = document.documentElement, tema = TEMAS.includes(D.ajustes.tema) ? D.ajustes.tema : 'lavanda', modo = D.ajustes.modo || 'auto';
     h.dataset.tema = tema;
     if (modo === 'oscuro' || (modo === 'auto' && mqOscuro.matches)) h.dataset.oscuro = ''; else delete h.dataset.oscuro;
-    try { localStorage.setItem('wallet-tema', JSON.stringify({ tema, modo })); } catch { /* solo acelera el primer pintado */ }
+    const vista = ['movil', 'pc'].includes(D.ajustes.vista) && !S.esApk() ? D.ajustes.vista : ''; // v24: tipo de vista (vacío = automática por el ancho)
+    if (vista) h.dataset.vista = vista; else delete h.dataset.vista;
+    try { localStorage.setItem('wallet-tema', JSON.stringify({ tema, modo, vista })); } catch { /* solo acelera el primer pintado */ }
     const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = getComputedStyle(h).getPropertyValue('--fondo').trim();
   }
   mqOscuro.addEventListener('change', () => aplicarTema());
@@ -756,12 +767,28 @@
     const tcs = cuentasVivas().filter(c => c.tipo === 'credito' && !c.parDe && !c.castigado && !c.privada);
     if (!tcs.length) return '';
     const corta = c => c.diaCorte ? L.diasEntre(L.hoy(), L.proximaFecha({ frec: 'mensual', dia: c.diaCorte }, L.hoy())) : null;
-    return `<section class="tarjeta panel-tc"><h2>💳 ${T.tusTarjetas}</h2><ul class="lista-plana">${tcs.map(c => {
+    const rk = CS.rankingTarjetas(D, L.hoy()), mejor = rk.length > 1 && rk[0].ok ? rk[0] : null; // v24: la que conviene hoy
+    return `<section class="tarjeta panel-tc"><div class="sub-fila"><h2>💳 ${T.tusTarjetas}</h2>${rk.length ? `<button class="enlace" data-accion="con-cual">${T.conCual}</button>` : ''}</div>
+      ${mejor ? `<p class="conviene">💡 ${T.convieneHoy(esc(mejor.c.banco || mejor.c.nombre), mejor.dias, fechaCorta(mejor.pago))}</p>` : ''}
+      <ul class="lista-plana">${tcs.map(c => {
       const deuda = -L.saldoCuenta(D, c.id), n = corta(c), uso = c.limite ? Math.round(Math.min(1, Math.max(0, deuda) / c.limite) * 100) : null;
       return `<li><button class="fila-tc" data-cuenta="${esc(c.id)}"><span class="cc-mini" data-dis="${c.diseno || 'lavanda'}"></span>
         <span class="txt"><b>${esc(c.banco || c.nombre)}${c.ultimos4 ? ` ••${esc(c.ultimos4)}` : ''}</b><small>${[deuda > 0 ? `${T.debes} ${din(deuda, c.moneda)}` : T.aFavor + ' ' + din(-deuda, c.moneda), uso != null ? `${uso}% ${T.usado}` : '', n != null ? T.cortaEn(n) : ''].filter(Boolean).join(' · ')}</small></span>
         ${pagoCC(c, deuda)}</button></li>`;
     }).join('')}</ul></section>`;
+  }
+  // v24: «¿Con cuál pago?»: escribes el monto y se ordenan tus tarjetas de mejor a peor.
+  function hojaConCual() {
+    const f = abrirHoja(`<h2>🧮 ${T.conCual}</h2><p class="nota">${T.conCualTxt}</p>
+      <label class="campo">${T.montoCompra} (${sim(P())})<input name="monto" inputmode="decimal" autocomplete="off" placeholder="0.00"></label>
+      <ul class="lista-plana" data-rk></ul><p class="nota">${T.avisoConsejos}</p>
+      <div class="acciones uno"><button type="button" class="pildora" data-cerrar>${T.cerrar}</button></div>`, () => {}, { sinAcciones: true });
+    const pintarRk = () => {
+      const m = L.parseMonto(f.monto.value) || 0;
+      f.querySelector('[data-rk]').innerHTML = CS.rankingTarjetas(D, L.hoy(), m).map((x, i) => `<li class="rk ${x.ok ? '' : 'no'}"><span class="rk-n">${x.ok ? (i === 0 ? '🥇' : i + 1) : '⛔'}</span>
+        <span class="txt"><b>${esc(x.c.banco || x.c.nombre)}${x.c.ultimos4 ? ' ••' + esc(x.c.ultimos4) : ''}</b><small>${x.ok ? T.rkDias(x.dias, fechaCorta(x.pago)) : x.disp != null && m > x.disp ? T.rkNoAlcanza : T.rkMuyUsada}${x.disp != null ? ' · ' + T.disponible + ' ' + din(x.disp, x.c.moneda) : ''}</small></span></li>`).join('') || `<li>${T.rkSinDatos}</li>`;
+    };
+    f.monto.oninput = pintarRk; pintarRk();
   }
   function tarjetaCC(c, i) {
     const deuda = -L.saldoCuenta(D, c.id), par = pareja(c);
@@ -1036,7 +1063,7 @@
         <button class="pildora ancho" data-accion="presupuesto">${T.presupuesto}</button>
         <button class="pildora ancho" data-accion="categorias">${T.categorias}</button>
         <label class="interruptor"><span>${T.ocultar}</span><input type="checkbox" id="ocultar" ${oculto() ? 'checked' : ''}><i></i></label>
-        <label class="campo fila-campo"><span>🪙 ${T.redondeo}</span><select id="redondeo-cuenta"><option value="">${T.apagado}</option>${cuentasVivas().filter(c => c.tipo === 'ahorro' || c.tipo === 'inversion').map(c => `<option value="${esc(c.id)}" ${(D.ajustes.redondeo || {}).cuentaId === c.id ? 'selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select></label>
+        <label class="campo fila-campo"><span>🪙 ${T.redondeo} ${ayudaBtn('redondeo')}</span><select id="redondeo-cuenta"><option value="">${T.apagado}</option>${cuentasVivas().filter(c => c.tipo === 'ahorro' || c.tipo === 'inversion').map(c => `<option value="${esc(c.id)}" ${(D.ajustes.redondeo || {}).cuentaId === c.id ? 'selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select></label>
         ${D.ajustes.redondeo ? `<label class="campo fila-campo"><span>${T.redondeoA}</span><select id="redondeo-a">${[10, 25, 50, 100].map(v => `<option value="${v}" ${(D.ajustes.redondeo.a || 100) === v ? 'selected' : ''}>${sim(P())} ${v}</option>`).join('')}</select></label>` : ''}
         <p class="nota">${T.redondeoTxt}</p>
         ${D.ajustes.guiaOculta ? `<button class="pildora ancho" data-accion="ver-guia">🎮 ${T.verGuia}</button>` : ''}
@@ -1045,6 +1072,8 @@
         <div class="temas">${TEMAS.map(t => `<button class="tema-btn" data-accion="tema" data-tema="${t}" aria-pressed="${(D.ajustes.tema || 'lavanda') === t}">
           <i style="background:${MUESTRAS[t][0]};--m2:${MUESTRAS[t][1]}"></i><small>${T.temas[t]}</small></button>`).join('')}</div>
         <div class="segmento" role="radiogroup" aria-label="${T.modo}">${['auto', 'claro', 'oscuro'].map(m => `<label><input type="radio" name="modo-app" value="${m}" ${(D.ajustes.modo || 'auto') === m ? 'checked' : ''}><span>${T.modos[m]}</span></label>`).join('')}</div>
+        ${S.esApk() ? '' : `<p class="campo-et">🖥️ ${T.tipoVista}</p><div class="segmento" role="radiogroup" aria-label="${T.tipoVista}">${['auto', 'movil', 'pc'].map(v => `<label><input type="radio" name="vista-app" value="${v}" ${(D.ajustes.vista || 'auto') === v ? 'checked' : ''}><span>${T.vistas[v]}</span></label>`).join('')}</div>
+        <p class="nota">${T.tipoVistaTxt}</p>`}
       </section>
       ${window.Portada ? `<h2 class="sub">👤 ${T.miCuenta}</h2><section class="tarjeta"><p class="nota">${estadoMembresia(membresia())}</p>
         <button class="pildora ancho" data-accion="planes">✨ ${T.mVerPlanes}</button>${Portada.hayCuentas() ? `<button class="pildora ancho" data-accion="sugerencia">💡 ${T.sugT}</button>` : ''}${membresia().admin ? `<button class="pildora oscura ancho" data-accion="admin">🛠 ${T.adminT}</button>` : ''}${Portada.sesion() ? `<p class="grande">${esc(Portada.sesion().nombre || '')}</p><small>${esc(Portada.sesion().correo || '')}</small>
@@ -1052,6 +1081,7 @@
         <button class="pildora peligro ancho" data-accion="cuenta-borrar">${T.borrarCuenta}</button>` : `<button class="pildora oscura ancho" data-accion="cuenta-entrar">${T.entrarOCrear}</button>`}</section>` : ''}
       <h2 class="sub">🛡️ ${T.tuPrivT}</h2><section class="tarjeta"><ul class="tu-priv">${T.tuPriv.map(x => `<li>${x}</li>`).join('')}</ul>
         <p class="nota"><a href="legal/privacidad.html">${T.pPrivacidad}</a> · <a href="legal/terminos.html">${T.pTerminos}</a> · <a href="mailto:cuadre.app.rd@gmail.com">${T.pContacto}</a></p></section>
+      ${tarjetaSincro()}
       <h2 class="sub">${ico('candado')} ${T.seguridad}</h2><section class="tarjeta">
         <label class="interruptor"><span>${T.bloquearApp}</span><input type="checkbox" id="bloqueo" ${D.ajustes.bloqueoApp ? 'checked' : ''}><i></i></label>
         <p class="nota">${T.bloquearTxt}</p>
@@ -1065,15 +1095,16 @@
         : `<button class="pildora oscura ancho" data-accion="desbloquear">${T.abrirBoveda}</button>
            <button class="enlace peligro" data-accion="olvide">${T.olvidePin}</button>`}
       </section>
-      <h2 class="sub">${ico('campana')} ${T.avisos}</h2><section class="tarjeta">
+      <h2 class="sub">${ico('campana')} ${T.avisos} ${ayudaBtn('avisos')}</h2><section class="tarjeta">
         <label class="interruptor"><span>${T.avisosPagos}</span><input type="checkbox" id="avisos" ${D.ajustes.avisos !== false ? 'checked' : ''}><i></i></label>
         <label class="campo fila-campo"><span>${T.horaAviso}</span><select id="hora">${[6, 7, 8, 9, 10, 12, 15, 18, 20].map(h => `<option value="${h}" ${(D.ajustes.horaAviso == null ? 9 : D.ajustes.horaAviso) === h ? 'selected' : ''}>${String(h).padStart(2, '0')}:00</option>`).join('')}</select></label>
         <p class="nota">${S.esApk() ? T.avisosTxt : T.avisosWeb}</p>
         <h3 class="mini-t">${T.avisosAnimoT}</h3>
-        ${['sinGastos', 'ahorro', 'corte'].map(k => `<label class="interruptor"><span>${T.avisosAnimo[k]}</span><input type="checkbox" data-animo="${k}" ${(D.ajustes.avisosAnimo || {})[k] !== false ? 'checked' : ''}><i></i></label>`).join('')}
+        ${['sinGastos', 'ahorro', 'corte', 'tarjetas', 'deudas'].map(k => `<label class="interruptor"><span>${T.avisosAnimo[k]}</span><input type="checkbox" data-animo="${k}" ${(D.ajustes.avisosAnimo || {})[k] !== false ? 'checked' : ''}><i></i></label>`).join('')}
         <label class="interruptor"><span>${T.avisoPresT}</span><input type="checkbox" id="aviso-pres" ${D.ajustes.avisoPres !== false ? 'checked' : ''}><i></i></label>
       </section>
-      <h2 class="sub">${T.datos}</h2><section class="tarjeta">
+      <h2 class="sub">❓ ${T.ayudaT}</h2><section class="tarjeta"><p class="nota">${T.ayudaCentroTxt}</p><button class="pildora oscura ancho" data-accion="ayuda-centro">📚 ${T.ayudaCentro}</button></section>
+      <h2 class="sub">${T.datos} ${ayudaBtn('respaldo')}</h2><section class="tarjeta">
         <button class="pildora oscura ancho" data-accion="respaldar">${T.respaldar}</button>
         <small class="nota">${T.ultimoRespaldo}: ${u ? fechaCorta(u.slice(0, 10)) : T.nunca}</small>
         <label class="pildora ancho">${T.restaurar}<input type="file" id="archivo" accept="application/json,.json" hidden></label>
@@ -1149,7 +1180,8 @@
     const padres = t => D.categorias.filter(c => !c.borrado && !c.padre && !c.oculta && c.tipo === t);
     const chips = (t, sel) => padres(t).map((c, i) => `
       <label class="chip" style="--c:${c.color}"><input type="radio" name="cat" value="${esc(c.id)}" ${(sel ? sel === c.id : i === 0) ? 'checked' : ''}>
-      <span>${c.icono} ${esc(catNombre(c.id))}</span></label>`).join('') + `<button type="button" class="chip-btn" data-nueva-cat="${t}">＋ ${T.nuevaCorta}</button>`;
+      <span>${c.icono} ${esc(catNombre(c.id))}</span></label>`).join('') + `<button type="button" class="chip-btn" data-nueva-cat="${t}">＋ ${T.nuevaCorta}</button>`
+      + `<button type="button" class="chip-btn otra-cat" data-otra-cat>↩ ${T.cambiar}</button>`;
     const subChips = (padre, sel) => {
       const ss = D.categorias.filter(c => !c.borrado && c.padre === padre);
       return ss.length ? `<label class="chip sub" style="--c:${cat(padre).color}"><input type="radio" name="sub" value="" ${!sel ? 'checked' : ''}><span>${T.general}</span></label>` +
@@ -1159,7 +1191,7 @@
     const destino = m && m.tipo === 'transferencia' ? m.cuentaDestinoId : (cs.find(c => c.id !== cuentaSel) || {}).id;
     const fr = m || borrador ? [] : frecuentes();
     const f = abrirHoja(`
-      <h2>${m ? T.editarMov : T.anotar}</h2>
+      <div class="h-ayuda"><h2>${m ? T.editarMov : T.anotar}</h2><button type="button" class="ayuda-btn" data-ayuda-anotar aria-label="${T.ayudaT}">?</button></div>
       ${fr.length ? `<div class="chips plantillas frecuentes" aria-label="${T.frecuentes}">${fr.map((x, i) => `<button type="button" class="chip-btn" data-frecuente="${i}">${cat(x.categoriaId).icono} ${esc(x.nota || catNombre(x.categoriaId))} · ${din(x.monto, cuenta(x.cuentaId).moneda)}</button>`).join('')}</div>` : ''}
       <div class="foto-acciones">${m ? `<button type="button" class="pildora" data-foto-origen="camara">📷 ${T.tomarFoto}</button>` : `<button type="button" class="pildora oscura" data-foto-origen="camara">📷 ${T.escanearFactura}</button>`}
         <button type="button" class="pildora" data-foto-origen="galeria">🖼️ ${T.galeria}</button></div>
@@ -1181,11 +1213,12 @@
         </div>
       </div>
       <label class="campo"><span data-et-cuenta>${tipo === 'transferencia' ? T.desde : T.cuenta}</span><select name="cuenta">${opcionesCuentas(cuentaSel)}</select></label>
+      <p class="nota tc-hint" data-tc-hint hidden></p>
       <div data-solo="transferencia" ${tipo === 'transferencia' ? '' : 'hidden'}>
         <label class="campo">${T.hacia}<select name="destino">${opcionesCuentas(destino)}</select></label>
         <label class="campo" data-llega hidden>${T.montoLlega}<input name="llega" inputmode="decimal" autocomplete="off" value="${m && m.montoDestino && m.montoDestino !== m.monto ? aInput(m.montoDestino) : ''}" placeholder="0.00"></label>
       </div>
-      <fieldset class="chips" data-solo="cat" ${tipo === 'transferencia' ? 'hidden' : ''}><legend>${T.categoria}</legend><div data-chips>${chips(tipo === 'ingreso' ? 'ingreso' : 'gasto', catSel)}</div>
+      <fieldset class="chips" data-solo="cat" ${tipo === 'transferencia' ? 'hidden' : ''}><legend>${T.categoria}</legend><div data-chips ${catSel ? 'class="elegida"' : ''}>${chips(tipo === 'ingreso' ? 'ingreso' : 'gasto', catSel)}</div>
         <div data-subs class="subs"></div></fieldset>
       <label class="campo" data-lugar hidden>${T.lugar}<input name="lugar" list="lugares" maxlength="40" autocomplete="off" value="${m ? esc(m.lugar || '') : ''}"></label>
       <datalist id="lugares">${lugares.map(x => `<option value="${esc(x)}">`).join('')}</datalist>
@@ -1317,8 +1350,16 @@
         f.querySelector('[data-div-txt]').textContent = n > 1 && mt ? T.dividirTxt(n, L.formato(Math.floor(mt / n), (o || {}).moneda || P())) : T.dividirAyuda;
       }
       if (calcImp) calcImp();
+      // v24: con tarjeta, cuántos días hay para pagar este consumo y si otra tarjeta da más.
+      const hint = f.querySelector('[data-tc-hint]'), fh = f.fecha.value || L.hoy(), mio = tr === 'gasto' && o && o.tipo === 'credito' && CS.compraHoy(o, fh);
+      hint.hidden = !mio;
+      if (mio) {
+        const mejor = CS.rankingTarjetas(D, fh, montoActual() || 0)[0];
+        hint.textContent = T.tcHint(mio.dias, fechaCorta(mio.pago)) + (mejor && mejor.ok && mejor.c.id !== o.id && mejor.dias - mio.dias >= 5 ? ' ' + T.tcMejor(mejor.c.banco || mejor.c.nombre, mejor.dias - mio.dias) : '');
+      }
       resumenMas();
     };
+    f.fecha.addEventListener('change', revisar);
     const resumenMas = () => {
       const q = f.querySelector('[name=quien]:checked'), tr = f.querySelector('[name=tipo]:checked').value, partes = [];
       if (tr !== 'ingreso' && f.conImp && f.conImp.checked && f.impuesto.value) partes.push(`${T.imp} ${f.impuesto.value}`);
@@ -1329,7 +1370,9 @@
       f.querySelector('[data-mas-res]').textContent = partes.length ? '· ' + partes.join(' · ') : '';
     };
     f.addEventListener('change', () => resumenMas()); f.addEventListener('input', ev => { if (ev.target.name === 'impuesto' || ev.target.name === 'monto') resumenMas(); });
-    const pintarSubs = sel => { const p = f.querySelector('[name=cat]:checked'); f.querySelector('[data-subs]').innerHTML = p ? subChips(p.value, sel) : ''; };
+    // v24: al elegir una categoría, las demás se esconden y salen sus subcategorías (pantalla menos cargada). «Cambiar» las vuelve a mostrar.
+    const cajaCats = () => f.querySelector('[data-chips]');
+    const pintarSubs = sel => { const p = f.querySelector('[name=cat]:checked'); f.querySelector('[data-subs]').innerHTML = p && cajaCats().classList.contains('elegida') ? subChips(p.value, sel) : ''; };
     const otraCalc = () => {
       const caja = f.querySelector('[data-otra]'); caja.hidden = !f.otra.checked;
       if (!f.otra.checked) return;
@@ -1347,10 +1390,14 @@
       f.querySelector('[data-solo=cat]').hidden = tr;
       f.querySelector('[data-no-tr]').hidden = tr;
       f.querySelector('[data-et-cuenta]').textContent = tr ? T.desde : T.cuenta;
-      if (!tr) { f.querySelector('[data-chips]').innerHTML = chips(r.value); pintarSubs(); }
+      if (!tr) { cajaCats().classList.remove('elegida'); cajaCats().innerHTML = chips(r.value); pintarSubs(); }
       revisar();
     });
-    f.querySelector('[data-chips]').onchange = ev => { if (ev.target.name === 'cat') { pintarSubs(); revisar(); } };
+    f.querySelector('[data-chips]').onchange = ev => { if (ev.target.name === 'cat') { cajaCats().classList.add('elegida'); pintarSubs(); revisar(); } };
+    f.querySelector('[data-chips]').addEventListener('click', ev => {
+      if (ev.target.closest('[data-otra-cat]')) { cajaCats().classList.remove('elegida'); pintarSubs(); }
+      else if (ev.target.name === 'cat' && !cajaCats().classList.contains('elegida')) { cajaCats().classList.add('elegida'); pintarSubs(); } // tocar la que ya venía marcada también la elige
+    });
     // Nueva categoría desde aquí: al guardarla (o cancelar) se vuelve a este formulario con todo lo escrito y la categoría elegida.
     f.querySelector('[data-chips]').onclick = ev => {
       const b = ev.target.closest('[data-nueva-cat]'); if (!b) return;
@@ -1386,7 +1433,7 @@
       const rt = radio('tipo', c.tipo); if (rt) rt.dispatchEvent(new Event('change'));
       ['monto', 'cuenta', 'destino', 'llega', 'monOrig', 'montoOrig', 'tasaOrig', 'fecha', 'nota', 'lugar'].forEach(n => poner(n, c[n]));
       if (c.otra) { f.otra.checked = true; otraCalc(); }
-      if (radio('cat', c.cat)) { pintarSubs(c.sub || ''); }
+      if (radio('cat', c.cat)) { cajaCats().classList.add('elegida'); pintarSubs(c.sub || ''); }
       radio('quien', c.quien || '');
       if (f.conImp && c.conImp != null) { f.conImp.checked = !!c.conImp; f.conImp.dispatchEvent(new Event('change')); if (c.impuesto != null) { f.impuesto.value = c.impuesto; f.impuesto.dispatchEvent(new Event('input')); } }
       if (borrador.foto) { fotoNueva = borrador.foto; mostrarFoto(fotoNueva); }
@@ -1443,7 +1490,8 @@
         <p class="nota">🔒 ${T.ccSeguro}</p>
         <fieldset class="chips"><legend>${T.disenoTarjeta}</legend><div class="dis-cc">${L.DISENOS_CC.map((d, i) => `<label class="chip" title="${T.disenosCC[i]}"><input type="radio" name="diseno" value="${d}" ${(c && c.diseno ? c.diseno === d : i === 0) ? 'checked' : ''}><span class="cc-mini" data-dis="${d}" aria-label="${T.disenosCC[i]}"></span></label>`).join('')}</div></fieldset>
         <label class="campo">${T.redTarjeta}<select name="red"><option value="">—</option>${L.REDES_CC.map((r, i) => `<option value="${r}" ${c && c.red === r ? 'selected' : ''}>${T.redesCC[i]}</option>`).join('')}</select></label>
-        <label class="campo">${T.limite}<input name="limite" inputmode="decimal" autocomplete="off" value="${c ? aInput(c.limite) : ''}" placeholder="0.00"></label>
+        <div class="dos"><label class="campo">${T.limite}<input name="limite" inputmode="decimal" autocomplete="off" value="${c ? aInput(c.limite) : ''}" placeholder="0.00"></label>
+          <label class="campo">${T.tasaTarjeta}<input name="tasaTc" inputmode="decimal" autocomplete="off" value="${c && c.tasa ? c.tasa : ''}" placeholder="60"></label></div>
         <div class="dos">
           <label class="campo">${T.diaCorte}<input name="diaCorte" type="number" min="1" max="31" value="${c && c.diaCorte || ''}"></label>
           <label class="campo">${T.diaPago}<input name="diaPago" type="number" min="1" max="31" value="${c && c.diaPago || ''}"></label>
@@ -1485,7 +1533,7 @@
           const lim = String(fd.get('limite') || '').trim() ? L.parseMonto(fd.get('limite')) : undefined;
           if (lim === null) return T.montoInvalido;
           const dia = k => { const n = Number(fd.get(k)); return n >= 1 && n <= 31 ? n : undefined; };
-          Object.assign(extra, { ultimos4: u4 || undefined, vence: v || undefined, limite: lim, diaCorte: dia('diaCorte'), diaPago: dia('diaPago'), diseno: fd.get('diseno') || undefined, red: fd.get('red') || undefined });
+          Object.assign(extra, { ultimos4: u4 || undefined, vence: v || undefined, limite: lim, diaCorte: dia('diaCorte'), diaPago: dia('diaPago'), diseno: fd.get('diseno') || undefined, red: fd.get('red') || undefined, tasa: L.parseNum(String(fd.get('tasaTc') || '').trim()) || undefined });
         }
         const t = ahora();
         const icono = tp === 'credito' ? '💳' : tp === 'inversion' ? '📈' : tp === 'ahorro' ? '🐷' : '💵';
@@ -1502,7 +1550,7 @@
         } else if (par && L.saldoCuenta(D, par.id) !== 0) return T.dobleConSaldo;
         const comunes = () => JSON.parse(JSON.stringify({ nombre, privada, ...extra, limite: undefined }));
         const sincronizar = (principalId) => {
-          if (dob && par) { for (const k of ['banco', 'impuestoPct', 'ultimos4', 'vence', 'diaCorte', 'diaPago', 'diseno', 'red']) delete par[k]; Object.assign(par, comunes(), { limite: dob.limite, editado: t }); }
+          if (dob && par) { for (const k of ['banco', 'impuestoPct', 'ultimos4', 'vence', 'diaCorte', 'diaPago', 'diseno', 'red', 'tasa']) delete par[k]; Object.assign(par, comunes(), { limite: dob.limite, editado: t }); }
           else if (dob) {
             const id2 = L.uuid();
             D.cuentas.push({ id: id2, moneda: dob.moneda, icono: '💳', tipo: 'credito', parDe: principalId, creado: t, editado: t, borrado: false, ...comunes(), limite: dob.limite });
@@ -1510,7 +1558,7 @@
           } else if (par) { par.borrado = true; par.editado = t; }
         };
         if (c) {
-          for (const k of ['banco', 'impuestoPct', 'ultimos4', 'vence', 'limite', 'diaCorte', 'diaPago', 'diseno', 'red']) delete c[k];
+          for (const k of ['banco', 'impuestoPct', 'ultimos4', 'vence', 'limite', 'diaCorte', 'diaPago', 'diseno', 'red', 'tasa']) delete c[k];
           Object.assign(c, { nombre, tipo: tp, privada, editado: t, icono: c.tipo === tp ? c.icono : icono }, JSON.parse(JSON.stringify(extra)));
           sincronizar(c.id);
           return void guardar(T.guardado);
@@ -1807,19 +1855,26 @@
 
   function hojaPresupuesto() {
     const pres = D.ajustes.presupuestos;
-    abrirHoja(`<h2>${T.presupuesto}</h2><p class="nota">${T.limitePorCategoria} (${sim(P())})</p>
-      ${D.categorias.filter(c => !c.borrado && c.tipo === 'gasto' && !c.padre).map(c => `<label class="campo fila-campo"><span>${c.icono} ${esc(catNombre(c.id))}</span>
-        <input name="${esc(c.id)}" inputmode="decimal" autocomplete="off" placeholder="—" value="${pres[c.id] ? (pres[c.id] / 100).toFixed(0) : ''}"></label>`).join('')}`,
+    // v24: 0 o vacío = sin presupuesto para esa categoría; 🙈 la oculta si no la usas (ej.: no tienes mascotas).
+    const f = abrirHoja(`<h2>${T.presupuesto}</h2><p class="nota">${T.limitePorCategoria} (${sim(P())})</p><p class="nota">${T.presCeroTxt}</p>
+      ${D.categorias.filter(c => !c.borrado && !c.oculta && c.tipo === 'gasto' && !c.padre).map(c => `<div class="pres-fila"><label class="campo fila-campo"><span>${c.icono} ${esc(catNombre(c.id))}</span>
+        <input name="${esc(c.id)}" inputmode="decimal" autocomplete="off" placeholder="0" value="${pres[c.id] ? (pres[c.id] / 100).toFixed(0) : ''}"></label>
+        <button type="button" class="icono-btn" data-ocultar-pres="${esc(c.id)}" aria-label="${T.noUsoCat}: ${esc(catNombre(c.id))}" title="${T.noUsoCat}">🙈</button></div>`).join('')}`,
       fd => {
         const nuevo = {};
         for (const [k, v] of fd.entries()) {
           if (!String(v).trim()) continue;
-          const c = L.parseMonto(v); if (!c) return T.montoInvalido;
-          nuevo[k] = c;
+          const c = L.parseMonto(v); if (c === null) return T.montoInvalido;
+          if (c) nuevo[k] = c; // 0 = sin presupuesto
         }
         D.ajustes.presupuestos = nuevo;
         guardar(T.guardado);
       });
+    f.querySelectorAll('[data-ocultar-pres]').forEach(b => b.onclick = () => {
+      const c = cat(b.dataset.ocultarPres); if (!c || !c.id) return;
+      c.borrado = true; c.editado = ahora(); delete D.ajustes.presupuestos[c.id];
+      b.closest('.pres-fila').remove(); guardar(T.catOcultadaPlan);
+    });
   }
 
   // Categorías: el usuario agrega las suyas (o subcategorías) y oculta las que no usa.
@@ -1841,7 +1896,11 @@
   // Crear o editar una categoría: ícono de una cuadrícula, nombre, tipo (gasto o ingreso), grupo (necesidad o gusto), dentro de cuál y color.
   const EMOJIS = ['🏷️', '🛒', '🍔', '🍕', '☕', '🍺', '🥗', '🍰', '🎮', '🎬', '🎵', '🎟️', '📚', '🎓', '💻', '📱', '🎧', '👕', '👟', '👜', '💄', '💇', '💅', '🏋️', '⚽', '🏖️',
     '🚗', '⛽', '🚕', '🚌', '🛵', '✈️', '🏠', '🔑', '🛋️', '💡', '💧', '🌐', '📺', '🔥', '🧽', '🔧', '🐶', '🐱', '👶', '🧸', '🎁', '🙏', '💊', '🩺', '🦷', '👓',
-    '💼', '💰', '🪙', '📈', '🏦', '💳', '🧾', '🎉', '🛍️', '📦', '✂️', '🌱', '🎨', '📷', '🧳', '⛪'];
+    '💼', '💰', '🪙', '📈', '🏦', '💳', '🧾', '🎉', '🛍️', '📦', '✂️', '🌱', '🎨', '📷', '🧳', '⛪',
+    // v24: más íconos para el día a día en RD
+    '🥛', '🍼', '🧷', '🧒', '🎒', '✏️', '🏫', '🏪', '🍗', '🍚', '🫘', '🍌', '🥑', '🥩', '🐟', '🥚', '🍞', '🧃', '🥤', '🍦', '🎂',
+    '🛺', '🏍️', '🚐', '🅿️', '🛣️', '🛞', '🔌', '🔋', '❄️', '🚿', '🧊', '🛢️', '📡', '📶', '☎️', '🖨️', '🧺', '🧹', '🧻', '🧴', '🪥',
+    '💈', '🏥', '💉', '🧪', '🩹', '🛡️', '📄', '⚖️', '🏧', '💸', '🤝', '🎲', '🎰', '🐔', '🐾', '💐', '🍾', '⛳', '🚲', '🪴', '🕯️', '🧘'];
   function hojaCategoria(c, tipoInicial, { volver } = {}) { // volver(idNueva|null): se abrió desde Anotar y hay que regresar ahí
     const paleta = ['#FF9F0A', '#FF6B35', '#FF375F', '#FF7EB3', '#BF5AF2', '#7B61FF', '#5E5CE6', '#0A84FF', '#64D2FF', '#34C7A0', '#30D158', '#A2845E', '#8E8E93'];
     const tipo = c ? c.tipo : (tipoInicial || 'gasto'), grupoSel = c ? (window.Consejos.grupoDe(D, c.id) || 'deseos') : 'necesidades';
@@ -1996,7 +2055,7 @@
       if (!conHuella && esperaPin() > 0) return ui.error(T.pinEspera(esperaPin()));
       if (!(await B.verificar(pin, D.ajustes.candado))) return pinFallido(ui);
       D.ajustes.intentosPin = 0; D.ajustes.bloqueoHasta = 0;
-      bloqueada = false; ui.cerrar(); pintar(); reanudarBorrador();
+      bloqueada = false; ui.cerrar(); pintar(); reanudarBorrador(); novedades();
     }, { enPantalla: true, huella: D.ajustes.huella ? 'auto' : false, olvide: () => alert(T.olvideCandado) });
   }
   function activarBloqueo(on) {
@@ -2071,6 +2130,21 @@
     return X.pendiente(tipo, id, fecha, Number(ronda) || 0);
   }
 
+  // v24: ayuda con ejemplos. «?» arriba: temas de la pantalla en la que estás; «?» pequeño: un tema; Centro de ayuda: todos.
+  const AYUDA_TAB = { inicio: ['presupuesto', 'tarjeta', 'conCual', 'dedo', 'misiones'], cartera: ['cartera', 'buscar', 'dedo', 'prestamos', 'tarjeta', 'doble'],
+    planes: ['miPlan', 'alcanza', 'deudas', 'hogar', 'fijos', 'nomina', 'metas', 'sam', 'encargos'], analisis: ['salud', 'proyeccion', 'misiones'],
+    calculadora: ['calculadora'], ajustes: ['sincro', 'redondeo', 'boveda', 'candado', 'avisos', 'respaldo', 'disenos'], anotar: ['dividir', 'impuesto', 'escanear', 'doble', 'redondeo'] };
+  const ayudaBtn = id => T.ayuda[id] ? `<button type="button" class="ayuda-btn" data-ayuda="${id}" aria-label="${T.ayudaDe(T.ayuda[id].t)}">?</button>` : '';
+  function hojaAyuda(ids) {
+    const todos = Object.keys(T.ayuda), lista = ids && ids.length ? ids.filter(i => T.ayuda[i]) : todos, uno = lista.length === 1;
+    const tema = (id, abierto) => { const a = T.ayuda[id]; return `<details class="ayuda-tema" ${abierto ? 'open' : ''}><summary>${a.icono} ${esc(a.t)}</summary>
+      <p><b>${T.ayudaQue}</b> ${esc(a.que)}</p><p class="ayuda-ej"><b>💡 ${T.ayudaEj}:</b> ${esc(a.ejemplo)}</p><p><b>📍 ${T.ayudaComo}</b> ${esc(a.como)}</p></details>`; };
+    const f = abrirHoja(`<h2>❓ ${uno ? esc(T.ayuda[lista[0]].t) : T.ayudaCentro}</h2>${uno ? '' : `<p class="nota">${T.ayudaCentroTxt}</p>`}
+      ${lista.map((id, i) => tema(id, uno || i === 0)).join('')}
+      ${lista.length < todos.length ? `<button type="button" class="pildora ancho" data-ayuda-todo>📚 ${T.ayudaVerTodo}</button>` : ''}
+      <div class="acciones uno"><button type="button" class="pildora oscura" data-cerrar>${T.entendido}</button></div>`, () => {}, { sinAcciones: true });
+    const b = f.querySelector('[data-ayuda-todo]'); if (b) b.onclick = () => hojaAyuda(null);
+  }
   // ---------- eventos ----------
   // v23: dedo presionado ~0.5 s sobre un movimiento → menú (Editar, Duplicar, Cambiar categoría, Borrar).
   let presion = null, sinClick = 0;
@@ -2087,6 +2161,8 @@
     programarCierre(); revisarAviso();
     if (bloqueada) return;
     if (Date.now() - sinClick < 800 && ev.target.closest('.fila[data-mov]')) return; // el toque largo ya abrió el menú
+    const ay = ev.target.closest('[data-ayuda]'); if (ay) { ev.preventDefault(); return hojaAyuda([ay.dataset.ayuda]); }
+    if (ev.target.closest('[data-ayuda-anotar]')) { ev.preventDefault(); return hojaAyuda(AYUDA_TAB.anotar); }
     const cc = ev.target.closest('[data-cambiar-cat]');
     if (cc) return hojaCambiarCat(D.movimientos.find(m => m.id === cc.dataset.cambiarCat));
     const el = ev.target.closest('[data-tab],[data-tab-ir],[data-accion],[data-mov],[data-cuenta],[data-mision],[data-pend]');
@@ -2120,7 +2196,7 @@
     else if (a === 'mover') { if (cuentasVivas().length < 2) aviso(T.dosCuentas, true); else hojaMov(null, 'transferencia'); }
     else if (a === 'nueva-cuenta') hojaCuenta();
     else if (a === 'nuevo-prestamo') hojaPrestamo('deuda');
-    else if (a === 'presupuesto') hojaPresupuesto();
+    else if (a === 'presupuesto') { tab = 'planes'; X.irA('plan'); pintar(); setTimeout(() => { const e = $('#mi-presupuesto'); if (e) e.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 80); } // v24: el presupuesto se arma en Mi plan
     else if (a === 'categorias') hojaCategorias();
     else if (a === 'ocultar') { D.ajustes.ocultarMontos = !oculto(); guardar(); }
     else if (a === 'ocultar-guia') { D.ajustes.guiaOculta = true; guardar(); }
@@ -2135,11 +2211,15 @@
     else if (a === 'ir-metas') ir('planes', 'metas');
     else if (a === 'exportar-csv') exportarCsv();
     else if (a === 'instalar') instalar();
-    else if (a === 'cuenta-entrar' || a === 'cuenta-crear') { if (hoja().open) hoja().close(); Portada.mostrar(a === 'cuenta-crear' ? 'registro' : 'login', { despues: () => pintar() }); }
+    else if (a === 'cuenta-entrar' || a === 'cuenta-crear') { if (hoja().open) hoja().close(); Portada.mostrar(a === 'cuenta-crear' ? 'registro' : 'login', { despues: () => { pintar(); programarSincro(300); } }); }
     else if (a === 'planes') hojaPlanes();
     else if (a === 'admin') hojaAdmin();
     else if (a === 'sugerencia') hojaSugerencia();
     else if (a === 'cuenta-salir') { Portada.salir(); pintar(); aviso(T.sesionCerrada); }
+    else if (a === 'sincro-activar') hojaClaveSincro(false);
+    else if (a === 'sincro-reemplazar') { if (confirm(T.sincroReemplazarConfirma)) hojaClaveSincro(true); }
+    else if (a === 'sincro-ya') { aviso(T.sincronizando); Sincro.sincronizar(WS).then(e => { pintar(); aviso(e.estado === 'activa' ? T.sincroListoCorto : T.sincroError, e.estado !== 'activa'); }); }
+    else if (a === 'sincro-apagar') { if (confirm(T.sincroApagarConfirma)) Sincro.desactivar(true).then(() => { pintar(); aviso(T.sincroApagada2); }, () => aviso(T.sincroError, true)); }
     else if (a === 'cuenta-borrar') { if (confirm(T.confirmarBorrarCuenta)) Portada.borrarCuenta().then(() => { pintar(); aviso(T.cuentaBorrada); }, e => aviso(e.message, true)); }
     else if (a === 'instalar-luego') { try { localStorage.setItem('cuadre-instalar-oculto', String(Date.now())); } catch { /* sin almacenamiento */ } pintar(); }
     else if (a === 'actualizar') aplicarVersion();
@@ -2151,6 +2231,10 @@
     else if (a === 'salud-periodo') { periodoSalud = Number(el.dataset.p); pintar(); }
     else if (a === 'per-off') moverPer(Number(el.dataset.o));
     else if (a === 'informe') hojaInforme();
+    else if (a === 'con-cual') hojaConCual();
+    else if (a === 'ayuda') { const ids = (AYUDA_TAB[tab] || []).slice(); if (tab === 'planes' && X.subActual) { const s = { plan: 'miPlan' }[X.subActual()] || X.subActual(); ids.sort((p, q) => (q === s) - (p === s)); } hojaAyuda(ids); }
+    else if (a === 'ayuda-centro') hojaAyuda(null);
+    else if (a === 'cat-nueva-plan') hojaCategoria(null, 'gasto'); // v24: desde Mi plan (ej.: la leche de la niña)
     else if (a === 'buscar') { filtroMovs.buscar = !(filtroMovs.buscar || filtroMovs.texto); if (!filtroMovs.buscar) filtroMovs.texto = ''; pintar(); const i = $('[data-filtro="texto"]'); if (i) i.focus(); }
     else if (a === 'movs-mas') { filtroMovs.limite += 150; $('#movs-res').innerHTML = listaMovs(); }
     else if (a === 'cab-pagar') hojaPagarTarjeta(cuenta(filtroMovs.cuentaId));
@@ -2186,6 +2270,7 @@
     else if (t.id === 'bloqueo') { t.checked = !t.checked; activarBloqueo(!D.ajustes.bloqueoApp); }
     else if (t.id === 'huella') { t.checked = !t.checked; activarHuella(!D.ajustes.huella); }
     else if (t.name === 'modo-app') { D.ajustes.modo = t.value; guardar(); }
+    else if (t.name === 'vista-app') { D.ajustes.vista = t.value === 'auto' ? undefined : t.value; aplicarTema(); guardar(); }
     else if (t.id === 'avisos') { D.ajustes.avisos = t.checked; guardar(t.checked ? T.avisosOn : T.avisosOff); }
     else if (t.id === 'hora') { D.ajustes.horaAviso = Number(t.value); guardar(T.guardado); }
     else if (t.dataset && t.dataset.animo) { D.ajustes.avisosAnimo = { ...(D.ajustes.avisosAnimo || {}), [t.dataset.animo]: t.checked }; guardar(T.guardado); }
@@ -2226,13 +2311,71 @@
 
   // ---------- contexto para secciones.js ----------
   const W = {
-    L, T, G, PL, PR, S, esc, ico, din, sim, aInput, aviso, guardar, pintar, abrirHoja, hoja, cuenta, cuentasVivas, cat, catNombre,
+    L, T, G, PL, PR, S, esc, ico, din, sim, aInput, aviso, guardar, pintar, abrirHoja, hoja, ayudaBtn, cuenta, cuentasVivas, cat, catNombre,
     opcionesCuentas, opcionesMonedas, segmento, fechaCorta, ahora, nuevoMov, bloqueImpuesto, conectarImpuesto, leerImpuesto,
     hojaPrestamo, hojaMov, P, get D() { return D; },
     irTab(t) { tab = t; pintar(); window.scrollTo(0, 0); },
   };
   const X = window.Secciones(W);
 
+  // v24: «Novedades»: al abrir una versión nueva, una hoja cuenta qué trae. Una sola vez por versión.
+  // A quien empieza de cero no se le muestra. shortcut: en las pruebas automáticas (navigator.webdriver) se salta; hay una prueba que la fuerza.
+  function novedades() {
+    if (D.ajustes.versionVista === APP_VERSION || bloqueada || navigator.webdriver) return;
+    const lista = T.novedades[APP_VERSION], nuevo = !D.cuentas.length && !D.movimientos.length;
+    if (!nuevo && lista && hoja().open) return; // hay un formulario abierto: se muestra la próxima vez
+    D.ajustes.versionVista = APP_VERSION;
+    if (!nuevo && lista) abrirHoja(`<h2>🎉 ${T.novedadesT(APP_VERSION)}</h2><p class="nota">${T.novedadesTxt}</p><ul class="novedades">${lista.map(x => `<li>${x}</li>`).join('')}</ul>
+      <div class="acciones uno"><button type="button" class="pildora oscura" data-cerrar>${T.entendido}</button></div>`, () => {}, { sinAcciones: true });
+    if (!nuevo && lista) guardar(); // a quien empieza de cero se le guarda con su primer cambio
+  }
+  // ---------- v24: sincronización entre dispositivos (sincro.js) ----------
+  // No se aplica lo que llega de la nube con un formulario abierto ni con el candado puesto: se intenta luego.
+  const WS = {
+    persistido: async () => (sesion && D.boveda ? { ...L.dividir(D).publico, boveda: D.boveda, bovedaT: D.bovedaT } : JSON.parse(JSON.stringify(D))),
+    aplicar: async unido => {
+      await DB.guardar(unido);
+      let nuevo = unido;
+      if (sesion && unido.boveda) {
+        try { const p = await B.abrirCon(sesion, unido.boveda); nuevo = L.unir(unido, L.normalizar({ ...unido, cuentas: p.cuentas, movimientos: p.movimientos })); }
+        catch { sesion = null; } // la bóveda cambió en otro dispositivo: se cierra y se abre con el PIN
+      }
+      D = nuevo; actualizarWidget(); programarAvisos(); if (!bloqueada) pintar();
+    },
+  };
+  let tSincro;
+  function programarSincro(ms) {
+    clearTimeout(tSincro);
+    if (!window.Sincro || Sincro.estado().estado !== 'activa') return;
+    tSincro = setTimeout(async () => {
+      if (bloqueada || hoja().open || guardando || document.hidden || !navigator.onLine) return programarSincro(15000);
+      const antes = Sincro.estado().estado;
+      const e = await Sincro.sincronizar(WS);
+      if (e.estado !== antes && tab === 'ajustes') pintar();
+    }, ms == null ? 1000 : ms);
+  }
+  const haceTxt = ms => { const m = Math.round((Date.now() - ms) / 60000); return m < 1 ? T.sincroAhora : m < 60 ? T.sincroMin(m) : T.sincroHoras(Math.round(m / 60)); };
+  function tarjetaSincro() {
+    if (!window.Sincro || !window.Portada || !Portada.hayCuentas()) return '';
+    const e = Sincro.estado();
+    const cuerpo = e.estado === 'sinSesion' ? `<p class="nota">${T.sincroSinSesion}</p><button class="pildora oscura ancho" data-accion="cuenta-entrar">${T.entrarOCrear}</button>`
+      : e.estado === 'apagada' ? `<p class="nota">${T.sincroApagada}</p><button class="pildora oscura ancho" data-accion="sincro-activar">🔄 ${T.sincroActivar}</button>`
+      : e.estado === 'clave' ? `<p class="nota">⚠️ ${T.sincroClave}</p><button class="pildora oscura ancho" data-accion="sincro-activar">🔑 ${T.sincroPonerClave}</button><button class="pildora ancho" data-accion="sincro-reemplazar">☁️ ${T.sincroReemplazar}</button>`
+      : `<p class="grande">${e.estado === 'error' ? '⚠️ ' + (e.error === 'version' ? T.sincroVersion : T.sincroError) : '✅ ' + (e.ultima ? T.sincroListo(haceTxt(e.ultima)) : T.sincroPendiente)}</p>
+         <button class="pildora ancho" data-accion="sincro-ya">🔄 ${T.sincroYa}</button><button class="enlace peligro" data-accion="sincro-apagar">${T.sincroApagar}</button>`;
+    return `<h2 class="sub">🔄 ${T.sincroT} ${ayudaBtn('sincro')}</h2><section class="tarjeta">${cuerpo}<p class="nota">🔐 ${T.sincroTxt}</p></section>`;
+  }
+  function hojaClaveSincro(reemplazar) {
+    abrirHoja(`<h2>🔐 ${reemplazar ? T.sincroReemplazar : T.sincroActivar}</h2><p class="nota">${reemplazar ? T.sincroReemplazarTxt : T.sincroActivarTxt}</p>
+      <label class="campo">${T.pClave}<input name="clave" type="password" autocomplete="current-password" required></label>`, async fd => {
+      const c = String(fd.get('clave') || ''); if (c.length < 8) return T.pClaveCorta;
+      try {
+        if (reemplazar) await Sincro.reemplazarNube(c);
+        else if (await Sincro.activar(c) === 'clave') return T.sincroClaveMal;
+      } catch (e) { return T.sincroError; }
+      aviso(T.sincroActivada); programarSincro(300); setTimeout(pintar, 400);
+    }, { textoOk: reemplazar ? T.sincroReemplazar : T.sincroActivar });
+  }
   // ---------- arranque ----------
   async function iniciar() {
     document.title = T.app;
@@ -2251,10 +2394,13 @@
     huellaOk = await S.huellaDisponible();
     if (D.ajustes.huella && !huellaOk) D.ajustes.huella = false;
     // Web: a quien llega por primera vez le sale la portada (registro, iniciar sesión o usar sin cuenta)
-    if (window.Portada && Portada.debeMostrar(D)) Portada.mostrar('portada', { despues: () => pintar() });
+    if (window.Portada && Portada.debeMostrar(D)) Portada.mostrar('portada', { despues: () => { pintar(); programarSincro(300); } });
     if (window.Portada) Portada.cargarMembresia().then(() => { if (!bloqueada) pintar(); }); enviarCola(); addEventListener('online', enviarCola);
+    programarSincro(1500); addEventListener('online', () => programarSincro(500));
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) programarSincro(800); });
+    setInterval(() => programarSincro(0), 120000); // con la app abierta, cada 2 minutos
     const nAuto = autoAnotar();
-    if (D.ajustes.bloqueoApp && D.ajustes.candado) cerrarApp(); else { pintar(); reanudarBorrador(); }
+    if (D.ajustes.bloqueoApp && D.ajustes.candado) cerrarApp(); else { pintar(); reanudarBorrador(); novedades(); }
     if (nAuto) guardar(bloqueada ? '' : T.autoAnotados(nAuto)); else actualizarWidget();
     accionWidget();
     programarAvisos();
@@ -2265,6 +2411,6 @@
       registrarSw();
     }
   }
-  window.WalletApp = { datos: () => D, version: APP_VERSION, bovedaAbierta, atras, instalar };
+  window.WalletApp = { datos: () => D, version: APP_VERSION, bovedaAbierta, atras, instalar, sincronizar: () => window.Sincro && Sincro.sincronizar(WS) };
   iniciar();
 })();

@@ -164,7 +164,7 @@
     return 'id-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
   }
 
-  const COLECCIONES = ['fijos', 'nominas', 'metas', 'sams', 'encargos', 'calculos'];
+  const COLECCIONES = ['fijos', 'nominas', 'metas', 'sams', 'encargos', 'calculos', 'hogarGastos']; // v24: hogarGastos = gastos compartidos y saldos entre la pareja
   function vacio() {
     const d = {
       version: VERSION,
@@ -222,6 +222,7 @@
     for (const k of ['diaCorte', 'diaPago']) if (ent(c[k], 1) !== null && c[k] <= 31) out[k] = c[k];
     if (DISENOS_CC.includes(c.diseno)) out.diseno = c.diseno;
     if (REDES_CC.includes(c.red)) out.red = c.red;
+    if (Number(c.tasa) > 0 && Number(c.tasa) <= 300) out.tasa = Number(c.tasa); // v24: tasa anual de la tarjeta (%)
     if (c.banco) out.banco = txt(c.banco, 30);
     if (c.persona) out.persona = txt(c.persona, 40);
     if (esId(c.parDe)) out.parDe = c.parDe;
@@ -275,6 +276,7 @@
       boveda: d.boveda && typeof d.boveda === 'object' && d.boveda.datos ? d.boveda : null,
     };
     for (const k of COLECCIONES) out[k] = normLista(d[k], ahora);
+    for (const k of ['ajustesT', 'bovedaT']) if (typeof d[k] === 'string') out[k] = d[k]; // v24: cuándo cambiaron los ajustes y la bóveda (para sincronizar)
     if (!MONEDAS[out.ajustes.monedaPrincipal]) out.ajustes.monedaPrincipal = 'DOP';
     if (!PAISES[out.ajustes.pais]) out.ajustes.pais = 'DO';
     out.ajustes.tasas = { ...(out.ajustes.tasas || {}) };

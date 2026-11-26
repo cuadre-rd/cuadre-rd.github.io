@@ -16,11 +16,11 @@ h3 { font-size: 1.15rem; margin: 22px 0 6px; }
 </style></head>
 <body><main><a class="volver" href="../">← Volver a Cuadre</a>
 <h2>Términos de uso de Cuadre</h2>
-<p>Vigente desde el 25 de noviembre de 2026.</p>
+<p>Vigente desde el 26 de noviembre de 2026.</p>
 <div class="resumen">
 <strong>En pocas palabras</strong>
 <ul>
-<li>✅ Tus finanzas se guardan en tu dispositivo; haz respaldos con frecuencia.</li>
+<li>✅ Tus finanzas se guardan en tu dispositivo y, si inicias sesión, se sincronizan cifradas entre tu teléfono y tu computadora. Igual haz respaldos con frecuencia.</li>
 <li>✅ Puedes usar Cuadre sin crear cuenta y borrar una cuenta desde Ajustes.</li>
 <li>✅ Tienes 30 días de prueba gratis. Después, tus datos nunca se borran: siempre puedes verlos, exportarlos y respaldarlos.</li>
 <li>⚠️ Para anotar movimientos o crear cuentas después de la prueba, debes elegir un plan.</li>
@@ -32,15 +32,22 @@ h3 { font-size: 1.15rem; margin: 22px 0 6px; }
 <p>Cuadre, en República Dominicana, es una app de finanzas personales. Al usarla, aceptas estos términos; si no estás de acuerdo, puedes dejar de usarla.</p>
 <p>La app es para personas de 13 años o más. Si eres menor de 18, necesitas permiso de tu madre, padre o tutor.</p>
 <h3>¿Dónde están mis datos?</h3>
-<p>Tus cuentas, movimientos, presupuestos, metas y fotos de facturas se guardan solo en tu teléfono o navegador. No se envían a un servidor ni hay sincronización en la nube de las finanzas.</p>
+<p>Tus cuentas, movimientos, presupuestos, metas y fotos de facturas se guardan solo en tu teléfono o navegador. Si inicias sesión, Cuadre guarda en la nube una copia cifrada con una llave que sale de tu contraseña, solo para sincronizar tus dispositivos; las fotos de facturas no se suben. Puedes apagarla en Ajustes → Sincronización.</p>
 <p>La lectura de facturas ocurre dentro del teléfono y la foto no sale. Puedes exportar un respaldo a un archivo que guardas tú; Cuadre te avisa si pasan siete días sin respaldar.</p>
 <h3>¿Cómo protege Cuadre la bóveda?</h3>
 <p>Las cuentas privadas se cifran con tu PIN mediante AES-GCM de 256 bits. Si olvidas el PIN, no hay forma de recuperarlo.</p>
 <p>La huella o la cara las maneja el teléfono mediante passkey o Android Keystore; Cuadre no ve huellas. Cuida tu PIN, dispositivo y archivos de respaldo.</p>
+<h3>¿Cómo funciona la sincronización?</h3>
+<p>Si inicias sesión con tu cuenta, Cuadre sincroniza tus datos entre tu teléfono y tu computadora para que veas lo mismo en los dos. Puedes apagarla cuando quieras en <strong>Ajustes → Sincronización</strong>.</p>
+<p>Antes de salir de tu dispositivo, tus datos se <strong>cifran</strong> (AES-GCM de 256 bits) con una llave que sale de tu contraseña y que se queda en tus dispositivos. En el servidor de Supabase (Estados Unidos) solo se guarda ese texto cifrado: nadie puede leerlo, ni siquiera Cuadre.</p>
+<ul><li>Las <strong>fotos de facturas no se suben</strong>: se quedan en el teléfono donde las tomaste.</li>
+<li>Si cambias u olvidas tu contraseña, la copia de la nube ya no se puede abrir; la reemplazas con la de tu dispositivo.</li>
+<li>Al apagar la sincronización o borrar tu cuenta, se borra la copia cifrada del servidor. Tus datos siguen en cada dispositivo.</li></ul>
+<p>La sincronización une los cambios de cada dispositivo; si cambias lo mismo en dos lugares, queda el cambio más reciente. Te recomendamos seguir haciendo respaldos.</p>
 <h3>¿Cómo funciona la cuenta opcional?</h3>
 <p>Si creas una cuenta, tu correo, nombre y contraseña se guardan con Supabase, cuyos servidores están en Estados Unidos. Cuadre nunca ve tu contraseña.</p>
 <p>El servidor también guarda tu plan y su fecha de vencimiento. Para borrar tu cuenta, ve a <strong>Ajustes → Mi cuenta → Borrar mi cuenta</strong> o escribe a <a href="mailto:cuadre.app.rd@gmail.com">cuadre.app.rd@gmail.com</a>.</p>
-<p>Al borrarla, se elimina del servidor tu correo, nombre, perfil y membresía. Los datos locales se borran desinstalando la app o limpiando los datos del navegador.</p>
+<p>Al borrarla, se elimina del servidor tu correo, nombre, perfil, membresía y la copia cifrada de tus datos. Los datos locales se borran desinstalando la app o limpiando los datos del navegador.</p>
 <h3>¿Qué incluye la membresía?</h3>
 <p>Tienes 30 días de prueba gratis. Cuando termine, Cuadre pasa a «solo lectura»: puedes ver, exportar y respaldar tus datos, pero no anotar movimientos ni crear cuentas hasta elegir un plan.</p>
 <p>No se borran ni bloquean tus datos por no pagar. El precio se muestra antes del pago. El pago es único por 1, 2 o 3 años, sin renovación automática ni cobros sorpresa.</p>
