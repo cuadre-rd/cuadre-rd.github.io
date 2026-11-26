@@ -2,7 +2,7 @@
 // Las secciones Planes y Calculadora están en secciones.js (reciben el contexto W).
 (function () {
   'use strict';
-  const APP_VERSION = '29';
+  const APP_VERSION = '30';
   const L = window.Logica, T = window.T, G = window.Graficas, B = window.Boveda, PL = window.Planes, PR = window.Prestamos, S = window.Sistema, CS = window.Consejos;
   const $ = s => document.querySelector(s);
   // v23: en Chrome de Android la página se achica con el teclado (así Guardar queda visible). Safari no conoce la clave y la marca como error.
@@ -1225,6 +1225,7 @@
       ev.preventDefault();
       const err = await alEnviar(new FormData(f), f);
       if (err) { f.querySelector('.error-form').textContent = err; return; }
+      if (f.dataset.borrador) borrarBorrador(); // ya se guardó: el borrador sobra
       if (h.open && h.contains(f)) h.close(); // si alEnviar abrió otra hoja, esa se queda
     };
     const x = h.querySelector('[data-cerrar]'); if (x) x.onclick = () => h.close();
@@ -1565,11 +1566,41 @@
     if (bloqueada || hoja().open) return;
     const b = leerBorrador(); if (!b) return;
     const m = b.editId ? D.movimientos.find(x => x.id === b.editId && !x.borrado) : null;
+    if (b.hoja === 'cuenta') { // v30: la hoja de cuenta también se recupera
+      const c = b.editId ? cuenta(b.editId) : null;
+      if (b.editId && (!c || c.borrado)) return borrarBorrador();
+      hojaCuenta(c || undefined);
+      if (hoja().open && hoja().querySelector('form[data-borrador]')) ponerCampos(hoja().querySelector('form'), b.campos || {});
+      return aviso(T.borradorRecuperado);
+    }
     if (b.editId && !m) return borrarBorrador();
     hojaMov(m, null, b);
     aviso(T.borradorRecuperado);
   }
   const guardarBorradorActivo = () => { if (snapActivo && hoja().open) guardarBorrador(snapActivo()); };
+  // v30: borrador genérico de una hoja (campos por nombre). Se guarda al escribir; Cancelar o Guardar lo borran.
+  function camposForm(f) {
+    const o = {};
+    for (const e of f.elements) {
+      if (!e.name || e.type === 'file' || e.disabled) continue;
+      if (e.type === 'radio') { if (e.checked) o[e.name] = e.value; } else if (e.type === 'checkbox') o[e.name] = e.checked; else o[e.name] = e.value;
+    }
+    return o;
+  }
+  function ponerCampos(f, o) {
+    for (const e of f.elements) {
+      if (!e.name || !(e.name in o) || e.disabled || e.type === 'file') continue;
+      if (e.type === 'radio') e.checked = e.value === o[e.name]; else if (e.type === 'checkbox') e.checked = !!o[e.name]; else e.value = o[e.name];
+    }
+    for (const e of f.elements) if (e.type === 'checkbox' || (e.type === 'radio' && e.checked)) e.dispatchEvent(new Event('change')); // muestra u oculta lo que depende
+  }
+  function conBorrador(f, id, editId) {
+    const snap = () => ({ t: Date.now(), hoja: id, editId, campos: camposForm(f) });
+    snapActivo = snap; f.dataset.borrador = id;
+    let tB; const alCambiar = () => { clearTimeout(tB); tB = setTimeout(() => { if (snapActivo === snap && hoja().open) guardarBorrador(snap()); }, 250); };
+    f.addEventListener('input', alCambiar); f.addEventListener('change', alCambiar);
+    const x = f.querySelector('[data-cerrar]'); if (x) x.addEventListener('click', borrarBorrador);
+  }
 
   // Cuenta normal o tarjeta de crédito. De la tarjeta solo se piden los 4 últimos números y el vencimiento (MM/AA).
   function hojaCuenta(c, tipoInicial) {
@@ -1689,14 +1720,16 @@
     if (c && c.diaPago) f.diaPago.dataset.tocado = '1';
     f.vence.oninput = () => { let v = f.vence.value.replace(/\D/g, '').slice(0, 4); if (v.length > 2) v = v.slice(0, 2) + '/' + v.slice(2); f.vence.value = v; };
     f.doble.onchange = () => { f.querySelector('[data-doble]').hidden = !f.doble.checked; };
+    conBorrador(f, 'cuenta', c && c.id); // v30: si sales a la app del banco, al volver sigue lo escrito
     if (!c) return;
-    const pc = f.querySelector('[data-pagar-cc]'); if (pc) pc.onclick = () => hojaPagarTarjeta(c);
-    f.querySelector('[data-fijar]').onclick = () => hojaSaldo(c);
-    const f2 = f.querySelector('[data-fijar2]'); if (f2) f2.onclick = () => hojaSaldo(par);
+    const pc = f.querySelector('[data-pagar-cc]'); if (pc) pc.onclick = () => { borrarBorrador(); hojaPagarTarjeta(c); };
+    f.querySelector('[data-fijar]').onclick = () => { borrarBorrador(); hojaSaldo(c); };
+    const f2 = f.querySelector('[data-fijar2]'); if (f2) f2.onclick = () => { borrarBorrador(); hojaSaldo(par); };
     f.querySelector('[data-borrar-cuenta]').onclick = () => borrarCuenta(c);
   }
   function borrarCuenta(c) {
     if (!confirm(T.confirmarBorrarCuenta)) return;
+    borrarBorrador();
     const t = ahora(), ids = new Set([c.id].concat(D.cuentas.filter(x => x.parDe === c.id).map(x => x.id)));
     D.cuentas.forEach(x => { if (ids.has(x.id)) { x.borrado = true; x.editado = t; } });
     D.movimientos.forEach(m => { if (ids.has(m.cuentaId) || ids.has(m.cuentaDestinoId)) { m.borrado = true; m.editado = t; } });
