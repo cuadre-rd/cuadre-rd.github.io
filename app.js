@@ -2,7 +2,7 @@
 // Las secciones Planes y Calculadora están en secciones.js (reciben el contexto W).
 (function () {
   'use strict';
-  const APP_VERSION = '30';
+  const APP_VERSION = '31';
   const L = window.Logica, T = window.T, G = window.Graficas, B = window.Boveda, PL = window.Planes, PR = window.Prestamos, S = window.Sistema, CS = window.Consejos;
   const $ = s => document.querySelector(s);
   // v23: en Chrome de Android la página se achica con el teclado (así Guardar queda visible). Safari no conoce la clave y la marca como error.
@@ -475,6 +475,17 @@
     if (v.caja) return sesion ? (await B.abrirCon(sesion, v.caja)).data : null;
     return v.data;
   }
+  // v31: fondo con foto propia en una tarjeta (c.fondo = id en la tienda «fotos»). Se pinta después de dibujar la vista.
+  const fondos = new Map();
+  function ponerFondo(el, src) { el.style.setProperty('--cc-bg', `linear-gradient(rgb(0 0 0 / .12), rgb(0 0 0 / .5)), url("${src}") center / cover`); el.style.setProperty('--cc-size', 'cover'); el.style.setProperty('--cc-anim', 'none'); el.classList.add('con-foto'); }
+  async function pintarFondos(raiz = document) {
+    for (const el of raiz.querySelectorAll('[data-fondo]')) {
+      const id = el.dataset.fondo;
+      if (!fondos.has(id)) { const src = await verFoto(id).catch(() => null); if (!src) continue; fondos.set(id, src); } // sin bóveda abierta: queda el diseño
+      ponerFondo(el, fondos.get(id));
+    }
+  }
+  const attrFondo = c => c.fondo ? ` data-fondo="${esc(c.fondo)}"` : '';
   // Foto a pantalla completa dentro de la hoja abierta (no cierra el formulario).
   function verFotoGrande(src) {
     if (!src) return;
@@ -515,7 +526,7 @@
     const vistas = { inicio: vInicio, analisis: vAnalisis, cuentas: vCuentas, ajustes: vAjustes, planes: X.vPlanes, calculadora: X.vCalculadora, cartera: vCartera };
     const v = $('#vista'); v.innerHTML = (swEspera ? `<button class="banda nueva" data-accion="actualizar">🔄 ${T.versionNueva}</button>` : '') + (vistas[tab] || vInicio)();
     if (tab !== tabPintado) { v.classList.remove('entra'); void v.offsetWidth; v.classList.add('entra'); tabPintado = tab; }
-    animarCifras(); ajustarMontos(); altoHero();
+    animarCifras(); ajustarMontos(); altoHero(); pintarFondos();
     const s = $('#extra'); if (s) s.oninput = () => { extraProy = Number(s.value) * 100; pintarProy(); };
     if (X.alPintar) X.alPintar(tab);
   }
@@ -671,7 +682,7 @@
     return `
       ${avisoRespaldo()}${bandaMembresia()}
       ${tarjetaInstalar()}
-      <section class="hero">
+      <div class="pila">${pilaCuentas()}<section class="hero">
         <div class="hero-pags" data-hero-pags><div class="hero-pag">
         <div class="hero-top"><small>${T.tuDinero}</small>
           <button class="icono-btn" data-accion="ocultar" aria-label="${oculto() ? T.mostrar : T.ocultar}">${ico(oculto() ? 'ojoNo' : 'ojo')}</button></div>
@@ -684,12 +695,14 @@
         ${heroDebe(hoy)}
         </div><div class="hero-pag">${heroEsteMes(hoy, din0.total)}</div></div>
         <div class="hero-puntos" role="tablist">${[T.tuDinero, T.esteMesT].map((t, i) => `<button role="tab" data-accion="hero-pag" data-i="${i}" aria-selected="${i === 0}" aria-label="${t}"></button>`).join('')}</div>
-        <div class="hero-mes">
-          <div><small>${ico('abajo')} ${T.recibido}</small><b>${din(r.ingresos)}</b></div>
-          <div><small>${ico('arriba')} ${T.gastado}</small><b>${din(r.gastos)}</b></div>
-        </div>
-        <div class="hero-botones"><button class="pildora clara" data-accion="ingreso">${T.ingreso}</button><button class="pildora oscura" data-accion="gasto">${T.gasto}</button></div>
-      </section>
+      </section></div>
+      <section class="tarjeta mis-gastos"><div><small>${T.misGastosMes(mesLargo(r.mes))}</small><b class="mg-monto">${din(r.gastos)}</b>
+        <small class="${pr.limite ? L.nivel(pr.pct) : ''}">${pr.limite ? T.pctPres(Math.round(pr.pct * 100)) : T.sinPresCorto}</small></div>
+        <button class="mg-mas" data-accion="gasto" aria-label="${T.gasto}">${ico('mas')}</button></section>
+      <div class="hero-mes">
+        <div class="tarjeta"><small>${ico('abajo')} ${T.recibido}</small><b>${din(r.ingresos)}</b><button class="pildora clara" data-accion="ingreso">${T.ingreso}</button></div>
+        <div class="tarjeta"><small>${ico('arriba')} ${T.gastado}</small><b>${din(r.gastos)}</b><button class="pildora oscura" data-accion="gasto">${T.gasto}</button></div>
+      </div>
       <div class="rapidas">
         ${[['mover', 'mover', T.transferencia, 'lila'], ['ir-plan', 'brujula', T.miPlan, 'durazno'], ['escanear', 'camara', T.escanear, 'menta'], ['ir-fijos', 'calendario', T.fijos, 'rosa']]
           .map(([a, i, t, c]) => `<button class="rapida ${c}" data-accion="${a}"><span class="r-ico">${ico(i, 'vivo')}</span><small>${t}</small></button>`).join('')}
@@ -705,10 +718,32 @@
             <button class="pildora oscura" data-accion="presupuesto">${T.crearPresupuesto}</button></div>`}
       </section>
       ${tarjetaGastos(r.mes)}
+      ${semanaGastos(hoy)}
       <div class="sub-fila"><h2 class="sub">${T.ultimos}</h2><button class="enlace" data-accion="ver-movs">${T.verTodo}</button></div>
       ${movs.length ? `<ul class="lista">${movs.map(filaMov).join('')}</ul>` : `<p class="nota centro">${T.sinMovs}</p>`}`;
   }
 
+  const mesLargo = m => new Date(Number(m.slice(0, 4)), Number(m.slice(5, 7)) - 1, 1).toLocaleDateString('es-DO', { month: 'long' });
+  // v31: dos cuentas asomadas detrás de «Tu dinero» (las que tienen foto primero, luego tarjetas y las de más saldo). Tocar abre la cuenta.
+  function pilaCuentas() {
+    const val = c => Math.abs(L.aPrincipal(D, L.saldoCuenta(D, c.id), c.moneda) || 0);
+    const cs = cuentasVivas().filter(c => !c.parDe && !c.castigado && ['diaria', 'ahorro', 'inversion', 'credito'].includes(c.tipo))
+      .sort((a, b) => (!!b.fondo - !!a.fondo) || ((b.tipo === 'credito') - (a.tipo === 'credito')) || val(b) - val(a)).slice(0, 2).reverse();
+    return cs.map((c, i) => {
+      const s = L.saldoCuenta(D, c.id), tc = c.tipo === 'credito';
+      return `<button class="pila-c" style="--i:${i + 2 - cs.length}" data-cuenta="${esc(c.id)}" ${c.diseno ? `data-dis="${c.diseno}"` : ''}${attrFondo(c)}>
+        <span>${c.icono} ${esc(c.banco || c.nombre)}${c.ultimos4 ? ` ··${esc(c.ultimos4)}` : ''}</span><b>${tc && s < 0 ? T.debes + ' ' : ''}${din(tc ? Math.abs(s) : s, c.moneda)}</b></button>`;
+    }).join('');
+  }
+  // v31: barras de gasto por día de esta semana (lunes a domingo); el día de más gasto lleva su monto.
+  function semanaGastos(hoy) {
+    const lunes = L.sumarDias(hoy, -((new Date(hoy + 'T12:00').getDay() + 6) % 7));
+    const dias = [0, 1, 2, 3, 4, 5, 6].map(i => { const f = L.sumarDias(lunes, i); return { f, g: f > hoy ? 0 : L.flujoRango(D, f, f).gastos }; });
+    const max = Math.max(...dias.map(d => d.g)); if (!max) return '';
+    const top = dias.find(d => d.g === max);
+    return `<section class="tarjeta semana"><h2>${T.gastosSemana}</h2><div class="sem-barras">${dias.map((d, i) => `<div class="sem-dia ${d === top ? 'top' : ''} ${d.f === hoy ? 'hoy' : ''}">
+      ${d === top ? `<span class="sem-et">${din(d.g)}</span>` : ''}<i style="height:${Math.max(4, Math.round(d.g / max * 100))}%"></i><small>${T.diasCortos[i]}</small></div>`).join('')}</div></section>`;
+  }
   // v25: tu plan a la vista en Inicio: cada categoría con lo gastado contra su límite (las más apretadas primero).
   function planInicio(pr) {
     const filas = pr.filas.filter(x => x.limite > 0), ver = filas.slice(0, 5);
@@ -867,7 +902,7 @@
       ${mejor ? `<p class="conviene">💡 ${T.convieneHoy(esc(mejor.c.banco || mejor.c.nombre), mejor.dias, fechaCorta(mejor.pago))}</p>` : ''}
       <ul class="lista-plana">${tcs.map(c => {
       const deuda = -L.saldoCuenta(D, c.id), n = corta(c), uso = c.limite ? Math.round(Math.min(1, Math.max(0, deuda) / c.limite) * 100) : null;
-      return `<li><button class="fila-tc" data-cuenta="${esc(c.id)}"><span class="cc-mini" data-dis="${c.diseno || 'lavanda'}"></span>
+      return `<li><button class="fila-tc" data-cuenta="${esc(c.id)}"><span class="cc-mini" data-dis="${c.diseno || 'lavanda'}"${attrFondo(c)}></span>
         <span class="txt"><b>${esc(c.banco || c.nombre)}${c.ultimos4 ? ` ••${esc(c.ultimos4)}` : ''}</b><small>${[deuda > 0 ? `${T.debes} ${din(deuda, c.moneda)}` : T.aFavor + ' ' + din(-deuda, c.moneda), uso != null ? `${uso}% ${T.usado}` : '', n != null ? T.cortaEn(n) : ''].filter(Boolean).join(' · ')}</small></span>
         ${pagoCC(c, deuda)}</button></li>`;
     }).join('')}</ul></section>`;
@@ -890,7 +925,7 @@
     const dis = c.diseno || L.DISENOS_CC[i % L.DISENOS_CC.length];
     const uso = c.limite ? Math.min(1, Math.max(0, deuda) / c.limite) : 0;
     const d2 = par ? -L.saldoCuenta(D, par.id) : 0;
-    return `<button class="cc" data-dis="${dis}" data-cuenta="${esc(c.id)}">
+    return `<button class="cc" data-dis="${dis}" data-cuenta="${esc(c.id)}"${attrFondo(c)}>
       <span class="cc-top"><b>${esc(c.banco || c.nombre)}</b>${RED_TXT[c.red] ? `<span class="cc-red ${c.red}">${RED_TXT[c.red]}</span>` : c.privada ? ico('candado') : ''}</span>
       ${c.privada && RED_TXT[c.red] ? ico('candado') : '<i class="cc-chip"></i>'}
       <span class="cc-saldos"><span class="cc-saldo"><small>${deuda > 0 ? T.debes : T.aFavor}</small><b>${din(Math.abs(deuda), c.moneda)}</b></span>
@@ -1615,6 +1650,9 @@
       ${segmento('tipo', ['diaria', 'ahorro', 'inversion', 'credito'].map(t => [t, T[t + 'Corto'] || T[t]]), tipo)}
       <label class="campo">${T.nombreCuenta}<input name="nombre" maxlength="40" required value="${c ? esc(c.nombre) : ''}"></label>
       <label class="campo">${T.banco}<input name="banco" maxlength="30" autocomplete="off" value="${c ? esc(c.banco || '') : ''}" placeholder="${T.bancoEj}"></label>
+      <div class="campo-fondo"><span class="etq">🖼️ ${T.fondoFoto}</span><div class="fondo-prev" data-fondo-prev data-dis="${c && c.diseno || 'aurora'}"><b>${c ? esc(c.banco || c.nombre) : T.tuTarjeta}</b></div>
+        <div class="dos"><button type="button" class="pildora" data-fondo-elegir>${T.elegirFoto}</button><button type="button" class="pildora" data-fondo-quitar ${c && c.fondo ? '' : 'hidden'}>${T.quitarFoto}</button></div>
+        <p class="nota">${T.fondoFotoTxt}</p></div>
       <div data-cc ${tipo === 'credito' ? '' : 'hidden'}>
         <div class="dos">
           <label class="campo">${T.ultimos4}<input name="ultimos4" inputmode="numeric" maxlength="4" autocomplete="off" value="${c ? esc(c.ultimos4 || '') : ''}" placeholder="1234"></label>
@@ -1652,12 +1690,17 @@
       ${c ? `<button type="button" class="pildora ancho" data-fijar>${T.fijarSaldo}${par ? ` (${sim(c.moneda)})` : ''}</button>
              ${par ? `<button type="button" class="pildora ancho" data-fijar2>${T.fijarSaldo} (${sim(par.moneda)})</button>` : ''}
              <button type="button" class="pildora peligro ancho" data-borrar-cuenta>${T.borrarCuenta}</button>` : ''}`,
-      fd => {
+      async fd => {
         const nombre = String(fd.get('nombre') || '').trim();
         if (!nombre) return T.nombreFalta;
         const privada = fd.get('privada') === 'on', tp = fd.get('tipo');
         if (privada && !bovedaAbierta()) return T.necesitaBoveda;
-        const extra = { banco: String(fd.get('banco') || '').trim() || undefined, fueraTotal: L.TIPOS_DINERO.includes(tp) && fd.get('enTotal') !== 'on' ? true : undefined };
+        let fondo = fondoQuitar ? undefined : c && c.fondo;
+        if (fondoNuevo || (fondo && c && !!c.privada !== privada)) { // foto nueva, o la cuenta entra/sale de la bóveda: se guarda (cifrada si es privada)
+          const id = 'f-' + L.uuid(), data = fondoNuevo || await verFoto(fondo);
+          if (data) { try { await DB.guardarFoto(id, await valorFoto(data, privada)); fondo = id; fondos.set(id, data); } catch (e) { console.error(e); return T.errorFoto; } }
+        }
+        const extra = { fondo, banco: String(fd.get('banco') || '').trim() || undefined, fueraTotal: L.TIPOS_DINERO.includes(tp) && fd.get('enTotal') !== 'on' ? true : undefined };
         const pctTxt = String(fd.get('impuestoPct') || '').trim();
         extra.impuestoPct = pctTxt ? L.parseNum(pctTxt) : undefined;
         if (pctTxt && (!extra.impuestoPct || extra.impuestoPct >= 100)) return T.pctInvalido;
@@ -1685,7 +1728,7 @@
         } else if (par && L.saldoCuenta(D, par.id) !== 0) return T.dobleConSaldo;
         const comunes = () => JSON.parse(JSON.stringify({ nombre, privada, ...extra, limite: undefined }));
         const sincronizar = (principalId) => {
-          if (dob && par) { for (const k of ['banco', 'impuestoPct', 'ultimos4', 'vence', 'diaCorte', 'diaPago', 'diseno', 'red', 'tasa']) delete par[k]; Object.assign(par, comunes(), { limite: dob.limite, editado: t }); }
+          if (dob && par) { for (const k of ['fondo', 'banco', 'impuestoPct', 'ultimos4', 'vence', 'diaCorte', 'diaPago', 'diseno', 'red', 'tasa']) delete par[k]; Object.assign(par, comunes(), { limite: dob.limite, editado: t }); }
           else if (dob) {
             const id2 = L.uuid();
             D.cuentas.push({ id: id2, moneda: dob.moneda, icono: '💳', tipo: 'credito', parDe: principalId, creado: t, editado: t, borrado: false, ...comunes(), limite: dob.limite });
@@ -1693,7 +1736,7 @@
           } else if (par) { par.borrado = true; par.editado = t; }
         };
         if (c) {
-          for (const k of ['banco', 'fueraTotal', 'impuestoPct', 'ultimos4', 'vence', 'limite', 'diaCorte', 'diaPago', 'diseno', 'red', 'tasa']) delete c[k];
+          for (const k of ['fondo', 'banco', 'fueraTotal', 'impuestoPct', 'ultimos4', 'vence', 'limite', 'diaCorte', 'diaPago', 'diseno', 'red', 'tasa']) delete c[k];
           Object.assign(c, { nombre, tipo: tp, privada, editado: t, icono: c.tipo === tp ? c.icono : icono }, JSON.parse(JSON.stringify(extra)));
           sincronizar(c.id);
           return void guardar(T.guardado);
@@ -1720,6 +1763,16 @@
     if (c && c.diaPago) f.diaPago.dataset.tocado = '1';
     f.vence.oninput = () => { let v = f.vence.value.replace(/\D/g, '').slice(0, 4); if (v.length > 2) v = v.slice(0, 2) + '/' + v.slice(2); f.vence.value = v; };
     f.doble.onchange = () => { f.querySelector('[data-doble]').hidden = !f.doble.checked; };
+    // v31: foto de fondo de esta tarjeta (solo en este teléfono, en la tienda de fotos)
+    let fondoNuevo = null, fondoQuitar = false;
+    const prev = f.querySelector('[data-fondo-prev]'), bQuitar = f.querySelector('[data-fondo-quitar]');
+    if (c && c.fondo) verFoto(c.fondo).then(src => { if (src) ponerFondo(prev, src); }).catch(() => {});
+    f.querySelector('[data-fondo-elegir]').onclick = async () => {
+      const img = await pedirImagen('galeria').catch(() => null); if (!img) return;
+      fondoNuevo = await comprimir(img.data, 900, 0.72); fondoQuitar = false; ponerFondo(prev, fondoNuevo); bQuitar.hidden = false;
+    };
+    bQuitar.onclick = () => { fondoNuevo = null; fondoQuitar = true; prev.classList.remove('con-foto'); prev.removeAttribute('style'); bQuitar.hidden = true; };
+    f.querySelectorAll('[name=diseno]').forEach(r => r.addEventListener('change', () => { prev.dataset.dis = r.value; }));
     conBorrador(f, 'cuenta', c && c.id); // v30: si sales a la app del banco, al volver sigue lo escrito
     if (!c) return;
     const pc = f.querySelector('[data-pagar-cc]'); if (pc) pc.onclick = () => { borrarBorrador(); hojaPagarTarjeta(c); };

@@ -2,6 +2,10 @@
 window.T = {
   app: 'Cuadre', lema: 'Cuadra tus cuartos',
   inicio: 'Inicio', analisis: 'Análisis', cuentas: 'Cuentas', ajustes: 'Ajustes', planes: 'Planes', calculadora: 'Calculadora',
+  misGastosMes: m => `Mis gastos de ${m}`, pctPres: n => `${n} % de tu presupuesto`, sinPresCorto: 'Sin presupuesto este mes',
+  gastosSemana: 'Gastos de la semana', diasCortos: ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'],
+  fondoFoto: 'Fondo con tu foto', elegirFoto: 'Elegir foto', quitarFoto: 'Quitar foto', tuTarjeta: 'Tu tarjeta',
+  fondoFotoTxt: 'Pon la foto que quieras como fondo de esta cuenta o tarjeta. Se guarda solo en este teléfono (no se sube a internet).',
   saludos: ['Buenas noches', 'Buenos días', 'Buenas tardes', 'Buenas noches'],
   gasto: 'Gasto', ingreso: 'Ingreso', transferencia: 'Mover', saldo: 'Saldo fijado',
   anotar: 'Anotar', cuenta: 'Cuenta', prestamo: 'Préstamo',
@@ -111,11 +115,14 @@ window.T = {
   deudaSaldadaT: '¡Deuda saldada!', deudaSaldada: n => `🎉 ¡Saldaste ${n}! Ese pago ahora va a tu próxima deuda.`,
   ordenPago: 'Orden para pagarlas', saldadaEn: m => `saldada en ${m}`,
   // v25: fecha de cada versión (para «Novedades y versiones» en Ajustes)
-  fechasVersion: { 30: '2026-11-26', 29: '2026-11-26', 28: '2026-11-26', 27: '2026-11-26', 26: '2026-11-26', 25: '2026-11-26', 24: '2026-11-26', 23: '2026-11-25', 22: '2026-11-23', 21: '2026-11-23', 20: '2026-11-23', 19: '2026-11-22', 18: '2026-11-22', 17: '2026-11-22', 16: '2026-11-21', 13: '2026-11-19', 11: '2026-11-16', 10: '2026-11-16' },
+  fechasVersion: { 31: '2026-11-26', 30: '2026-11-26', 29: '2026-11-26', 28: '2026-11-26', 27: '2026-11-26', 26: '2026-11-26', 25: '2026-11-26', 24: '2026-11-26', 23: '2026-11-25', 22: '2026-11-23', 21: '2026-11-23', 20: '2026-11-23', 19: '2026-11-22', 18: '2026-11-22', 17: '2026-11-22', 16: '2026-11-21', 13: '2026-11-19', 11: '2026-11-16', 10: '2026-11-16' },
   historialT: 'Novedades y versiones', historialTxt: 'Todo lo que ha traído cada actualización de Cuadre, de la más nueva a la más vieja.',
   verHistorial: 'Ver novedades anteriores', tuVersion: 'Tu versión', versionN: v => `Versión ${v}`,
   novedadesT: v => `Novedades de Cuadre v${v}`, novedadesTxt: 'Esto es lo nuevo que trae esta actualización. Tus datos y saldos siguen igual.', entendido: '¡Entendido!',
   novedades: {
+    31: ['🏠 <b>Inicio nuevo:</b> tus cuentas asoman detrás de «Tu dinero», «Mis gastos» con el botón + y las barras de gasto de la semana.',
+      '🖼️ <b>Tu foto en la tarjeta:</b> al crear o editar una cuenta o tarjeta, elige una foto de tu galería y será su fondo. Se queda solo en tu teléfono.',
+      '🟢 Las tarjetas se ven redondeadas en todos los temas.'],
     30: ['📝 <b>No pierdes lo que escribes:</b> si estás creando o editando una cuenta y sales a la app del banco, al volver sigue todo como lo dejaste (igual que al anotar un gasto).'],
     29: ['📅 <b>Presupuesto por mes:</b> en Mi plan arma cada mes aparte (diciembre trae el doble sueldo y gastos extra) y Cuadre te dice si ese mes te alcanza.',
       '🧭 <b>La regla no se aplica sola:</b> tocar 50/30/20 o 70/20/10 es solo una vista previa; se guarda al tocar «Aplicar». Arriba ves cómo repartes hoy.',

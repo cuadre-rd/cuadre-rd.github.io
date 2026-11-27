@@ -651,7 +651,7 @@ h1, h2, .sub, .hero-monto, .resumen-plan b, .celebra-caja b { font-family: var(-
 [data-tema="tech"] .hero-monto { font-size: 2.05rem; letter-spacing: -.04em; }
 [data-tema="tech"] .hero-monto::after { content: '_'; color: #00E5FF; animation: cursor 1s steps(1) infinite; }
 @keyframes cursor { 50% { opacity: 0; } }
-[data-tema="tech"] :is(.hero, .tarjeta, .lista, .rapida, .pildora, .barra, .barra button, .chip-cat, .pestanas button, .mini, .r-ico, .icono-btn, .redondo, dialog, .hero-mes > div, .debe-fila, .chips-hero span) { border-radius: var(--radio); }
+[data-tema="tech"] :is(.chip-cat, .pestanas button, .mini, .r-ico, .debe-fila, .chips-hero span) { border-radius: var(--radio); } /* v31: tarjetas redondeadas en todos los temas */
 [data-tema="tech"] .barra .fab { border-radius: 8px; transform: rotate(45deg); }
 [data-tema="tech"] .barra .fab .ico-svg { transform: rotate(-45deg); }
 [data-tema="tech"] .rapida { position: relative; background: var(--sup); }
@@ -738,9 +738,6 @@ h1, h2, .sub, .hero-monto, .resumen-plan b, .celebra-caja b { font-family: var(-
 [data-tema="naturaleza"] body { letter-spacing: 0; }
 [data-tema="naturaleza"] h1 { font-weight: 700; letter-spacing: -.015em; }
 [data-tema="naturaleza"] h2, [data-tema="naturaleza"] .sub { font-weight: 700; letter-spacing: 0; }
-[data-tema="naturaleza"] .hero { border-radius: 36px 14px 36px 14px; }
-[data-tema="naturaleza"] .tarjeta, [data-tema="naturaleza"] .lista { border-radius: 24px 10px 24px 10px; }
-[data-tema="naturaleza"] .rapida { border-radius: 22px 6px 22px 6px; }
 [data-tema="naturaleza"] .fondo::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 10% 0%, var(--b1), transparent 50%), radial-gradient(circle at 100% 100%, var(--b3), transparent 50%); opacity: var(--b-op); }
 [data-tema="naturaleza"] .fondo i { filter: none; width: 38px; height: 38px; border-radius: 0 80% 0 80%; background: var(--hoja) !important; opacity: .28;
   top: -60px !important; bottom: auto !important; right: auto !important; animation: hoja 18s linear infinite; }
@@ -1095,3 +1092,38 @@ details.plegable[open] > summary { margin-bottom: 10px; }
 .pm-extras button { min-width: 44px; min-height: 44px; }
 .cuenta-mes li.total.mal b { color: var(--rojo); }
 @media (prefers-reduced-motion: reduce) { details.plegable > summary::after { transition: none; } }
+
+/* ==================== v31: Inicio nuevo y foto en la tarjeta ==================== */
+.pila { display: flex; flex-direction: column; margin-bottom: 14px; }
+.pila .hero { margin-bottom: 0; }
+.pila-c { position: relative; z-index: 0; display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; height: 62px; margin: 0 calc(24px - var(--i, 0) * 12px) -26px;
+  padding: 10px 16px; border: 0; border-radius: 20px; color: #fff; text-shadow: 0 1px 2px rgb(0 0 0 / .3); font-size: .85rem; text-align: left;
+  background: var(--cc-bg, var(--marca)); background-size: var(--cc-size, 100% 100%); }
+.pila-c:not([data-dis]):not(.con-foto):nth-child(2) { background: var(--oscuro); color: var(--sobre-oscuro); text-shadow: none; }
+.pila-c span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pila-c b { flex: none; font-variant-numeric: tabular-nums; }
+.pila-c + .hero, .pila-c ~ .hero { z-index: 1; }
+.mis-gastos { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.mis-gastos small { display: block; color: var(--suave); }
+.mis-gastos small.verde { color: var(--verde); } .mis-gastos small.amarillo { color: var(--ambar, #B7791F); } .mis-gastos small.rojo { color: var(--rojo); }
+.mg-monto { display: block; font-size: 1.6rem; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.mg-mas { flex: none; width: 56px; height: 56px; border-radius: 50%; border: 0; display: grid; place-items: center; background: var(--marca); color: #fff; }
+.mg-mas .ico-svg { width: 26px; height: 26px; }
+.hero-mes .tarjeta { margin: 0; display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; }
+.hero-mes .tarjeta small { color: var(--suave); }
+.hero-mes .tarjeta b { font-variant-numeric: tabular-nums; }
+.hero-mes .tarjeta .pildora { margin-top: 8px; min-height: 42px; }
+.hero-mes { margin: 0 0 14px; }
+.sem-barras { display: grid; grid-template-columns: repeat(7, 1fr); align-items: end; height: 130px; gap: 6px; margin-top: 8px; }
+.sem-dia { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; }
+.sem-dia i { width: 22px; border-radius: 11px; background: var(--sup2); border: 1px solid var(--sep); }
+.sem-dia.top i { background: var(--acento); border-color: var(--acento); }
+.sem-dia small { font-size: .72rem; color: var(--suave); }
+.sem-dia.hoy small { color: var(--texto); font-weight: 700; }
+.sem-et { font-size: .68rem; font-weight: 700; white-space: nowrap; padding: 2px 6px; border-radius: 99px; background: var(--oscuro); color: var(--sobre-oscuro); }
+.campo-fondo { margin: 0 0 12px; }
+.campo-fondo .etq { display: block; font-weight: 600; margin-bottom: 6px; }
+.fondo-prev { aspect-ratio: 2.6; border-radius: 18px; padding: 12px 16px; display: flex; align-items: flex-end; color: #fff; text-shadow: 0 1px 3px rgb(0 0 0 / .5);
+  background: var(--cc-bg, #8E7CF0); background-size: var(--cc-size, 100% 100%); margin-bottom: 8px; }
+.con-foto { color: #fff !important; text-shadow: 0 1px 3px rgb(0 0 0 / .65) !important; }
+.cc.con-foto::after { display: none; }

@@ -221,6 +221,7 @@
     if (ent(c.limite) !== null) out.limite = c.limite;
     for (const k of ['diaCorte', 'diaPago']) if (ent(c[k], 1) !== null && c[k] <= 31) out[k] = c[k];
     if (DISENOS_CC.includes(c.diseno)) out.diseno = c.diseno;
+    if (esId(c.fondo)) out.fondo = c.fondo; // v31: foto de fondo (id en la tienda «fotos»)
     if (REDES_CC.includes(c.red)) out.red = c.red;
     if (Number(c.tasa) > 0 && Number(c.tasa) <= 300) out.tasa = Number(c.tasa); // v24: tasa anual de la tarjeta (%)
     if (Array.isArray(c.abonosProg)) { // v25: abonos programados a la tarjeta (todavía no salen de ninguna cuenta)
